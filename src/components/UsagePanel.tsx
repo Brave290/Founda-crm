@@ -109,16 +109,16 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <div className="glass rounded-xl px-3 py-2 flex items-center gap-3 text-xs">
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 flex items-center gap-2.5 text-xs">
         <div className="flex items-center gap-1.5">
-          <div className={`h-2 w-2 rounded-full ${isCritical ? "bg-red-400" : isLow ? "bg-yellow-400" : "bg-emerald-400"}`} />
-          <span className="text-gray-400">{usage.messagesUsed}/{usage.dailyLimit}</span>
+          <div className={`h-1.5 w-1.5 rounded-full ${isCritical ? "bg-red-400" : isLow ? "bg-amber-400" : "bg-emerald-400"}`} />
+          <span className="text-zinc-400 font-mono">{usage.messagesUsed}/{usage.dailyLimit}</span>
         </div>
-        <div className="h-1 w-16 bg-gray-800 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500" : isLow ? "bg-yellow-500" : "bg-gradient-to-r from-indigo-500 to-cyan-400"}`}
+        <div className="h-1 w-14 bg-white/10 rounded-full overflow-hidden hidden sm:block">
+          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500" : isLow ? "bg-amber-500" : "bg-white/70"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
-        <span className="text-gray-500 font-mono">
+        <span className="text-zinc-600 font-mono text-[11px]">
           {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
         </span>
       </div>
@@ -126,26 +126,24 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className="glass-card p-5 animate-fade-up">
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 animate-fade-up">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-white flex items-center gap-2">
-          <span className="text-lg">⚡</span> Usage
-        </h3>
-        <div className="text-xs text-gray-500 font-mono bg-gray-800/50 px-2 py-1 rounded-lg">
-          resets in {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
+        <h3 className="font-medium text-white text-sm">Usage</h3>
+        <div className="text-[11px] text-zinc-500 font-mono bg-white/[0.04] border border-white/[0.06] px-2 py-1 rounded-md">
+          resets {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
         </div>
       </div>
 
       {/* Messages */}
       <div className="mb-4">
         <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-gray-400">Messages today</span>
-          <span className={`font-mono ${isCritical ? "text-red-400" : isLow ? "text-yellow-400" : "text-gray-300"}`}>
+          <span className="text-zinc-500">Messages today</span>
+          <span className={`font-mono ${isCritical ? "text-red-400" : isLow ? "text-amber-400" : "text-zinc-300"}`}>
             {usage.messagesUsed} / {usage.dailyLimit}
           </span>
         </div>
-        <div className="h-2.5 bg-gray-800/80 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-gradient-to-r from-red-500 to-red-400 progress-stripe" : isLow ? "bg-gradient-to-r from-yellow-500 to-orange-400" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400"}`}
+        <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-white/70"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
       </div>
@@ -153,36 +151,36 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
       {/* Tokens */}
       <div className="mb-4">
         <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-gray-400">Tokens today</span>
-          <span className="font-mono text-gray-300">
+          <span className="text-zinc-500">Tokens today</span>
+          <span className="font-mono text-zinc-300">
             {(usage.tokensUsed / 1000).toFixed(1)}k / {(usage.tokenLimit / 1000).toFixed(0)}k
           </span>
         </div>
-        <div className="h-2.5 bg-gray-800/80 rounded-full overflow-hidden">
-          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-700"
+        <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
+          <div className="h-full rounded-full bg-white/50 transition-all duration-700"
             style={{ width: `${tokPct}%` }} />
         </div>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="glass rounded-lg p-2">
-          <div className="text-lg font-bold text-indigo-400">{usage.messagesUsed}</div>
-          <div className="text-[10px] text-gray-500">Sent</div>
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
+          <div className="text-lg font-semibold text-white">{usage.messagesUsed}</div>
+          <div className="text-[10px] text-zinc-600">Sent</div>
         </div>
-        <div className="glass rounded-lg p-2">
-          <div className="text-lg font-bold text-cyan-400">{usage.dailyLimit - usage.messagesUsed}</div>
-          <div className="text-[10px] text-gray-500">Left</div>
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
+          <div className="text-lg font-semibold text-white">{usage.dailyLimit - usage.messagesUsed}</div>
+          <div className="text-[10px] text-zinc-600">Left</div>
         </div>
-        <div className="glass rounded-lg p-2">
-          <div className="text-lg font-bold text-emerald-400">{usage.conversations}</div>
-          <div className="text-[10px] text-gray-500">Chats</div>
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
+          <div className="text-lg font-semibold text-white">{usage.conversations}</div>
+          <div className="text-[10px] text-zinc-600">Chats</div>
         </div>
       </div>
 
       {isLow && (
-        <div className={`mt-3 text-xs px-3 py-2 rounded-lg ${isCritical ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"}`}>
-          ⚠️ {isCritical ? "Almost out of messages! Resets at midnight." : "Running low on messages today."}
+        <div className={`mt-3 text-xs px-3 py-2 rounded-lg border ${isCritical ? "bg-red-500/[0.08] text-red-400 border-red-500/20" : "bg-amber-500/[0.08] text-amber-400 border-amber-500/20"}`}>
+          {isCritical ? "Almost out of messages. Resets at midnight." : "Running low on messages today."}
         </div>
       )}
     </div>
@@ -203,11 +201,15 @@ export function useToast() {
   const Toaster = () => (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast-in glass-strong rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl ${
-          t.type === "success" ? "border-emerald-500/30" : t.type === "error" ? "border-red-500/30" : "border-indigo-500/30"
+        <div key={t.id} className={`toast-in rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl border bg-[#111113] ${
+          t.type === "success" ? "border-emerald-500/25" : t.type === "error" ? "border-red-500/25" : "border-white/10"
         }`}>
-          <span>{t.type === "success" ? "✅" : t.type === "error" ? "❌" : "ℹ️"}</span>
-          <span className="text-gray-200">{t.message}</span>
+          <span className={
+            t.type === "success" ? "text-emerald-400" : t.type === "error" ? "text-red-400" : "text-zinc-400"
+          }>
+            {t.type === "success" ? "✓" : t.type === "error" ? "✕" : "i"}
+          </span>
+          <span className="text-zinc-200">{t.message}</span>
         </div>
       ))}
     </div>

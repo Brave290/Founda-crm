@@ -18,7 +18,7 @@ export interface GuestSession {
 
 export function isGuest(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(GUEST_KEY) === "true" && !localStorage.getItem("supabase.auth.token");
+  return localStorage.getItem(GUEST_KEY) === "true";
 }
 
 export function enterGuestMode() {
@@ -27,7 +27,6 @@ export function enterGuestMode() {
 
 export function exitGuestMode() {
   localStorage.removeItem(GUEST_KEY);
-  localStorage.removeItem(GUEST_SESSIONS_KEY);
 }
 
 // Guest sessions (localStorage only, cleared when account created)
@@ -60,22 +59,50 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      if (!user) setGuest(isGuest());
-      setLoading(false);
-    });
+    let active = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
+    const finish = (u: any) => {
+      if (!active) return;
+      setUser(u);
+      if (u) {
         setGuest(false);
         exitGuestMode();
+      } else {
+        setGuest(isGuest());
       }
+      setLoading(false);
+    };
+
+    let supabase: ReturnType<typeof createSupabaseBrowserClient>;
+    try {
+      supabase = createSupabaseBrowserClient();
+    } catch {
+      finish(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    // Never hang on the spinner — resolve even if the network fails
+    const timeout = setTimeout(() => finish(null), 5000);
+
+    supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => finish(user))
+      .catch(() => finish(null));
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      clearTimeout(timeout);
+      finish(session?.user || null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -83,6 +110,7 @@ export function useAuth() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
     exitGuestMode();
+    setGuest(false);
     return {};
   };
 
@@ -94,6 +122,11 @@ export function useAuth() {
       options: { data: { full_name: name } },
     });
     if (error) return { error: error.message };
+    if (data.session) {
+      exitGuestMode();
+      setGuest(false);
+      setUser(data.user);
+    }
     return { needsConfirm: !data.session };
   };
 
@@ -101,13 +134,15 @@ export function useAuth() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     setUser(null);
+    setGuest(false);
   };
 
-  const continueAsGuest = () => {
+  const continueAsGuest = useCallback(() => {
     enterGuestMode();
     setGuest(true);
     setUser(null);
-  };
+    setLoading(false);
+  }, []);
 
   return { user, guest, loading, login, register, logout, continueAsGuest };
 }

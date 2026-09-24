@@ -5,6 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth, loadGuestSessions, saveGuestSession } from "@/lib/auth";
 import { trackUsage, canSend, loadUsage, UsagePanel, useToast } from "@/components/UsagePanel";
+import {
+  WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, BotIcon,
+  ImageIcon, MicIcon, SendIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
+  AlertIcon, ArrowLeftIcon, ChevronDownIcon, CheckIcon,
+} from "@/components/icons";
 
 interface Message {
   id?: string;
@@ -15,10 +20,10 @@ interface Message {
 }
 
 const AGENTS = [
-  { id: "build", name: "Build", icon: "🔧" },
-  { id: "plan", name: "Plan", icon: "📋" },
-  { id: "general", name: "General", icon: "💬" },
-  { id: "explore", name: "Explore", icon: "🔍" },
+  { id: "build", name: "Build", icon: <WrenchIcon size={15} /> },
+  { id: "plan", name: "Plan", icon: <ClipboardIcon size={15} /> },
+  { id: "general", name: "General", icon: <MessageIcon size={15} /> },
+  { id: "explore", name: "Explore", icon: <SearchIcon size={15} /> },
 ];
 
 const SUGGESTIONS = [
@@ -48,6 +53,7 @@ export default function ChatPage() {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,12 +65,11 @@ export default function ChatPage() {
   useEffect(() => {
     import("@/lib/supabase-browser").then(({ createSupabaseBrowserClient }) => {
       setSupabase(createSupabaseBrowserClient());
-    });
+    }).catch(() => {});
     setVoiceSupported(
       typeof window !== "undefined" &&
         ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
     );
-    // Check usage limit
     const usage = loadUsage();
     if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
   }, []);
@@ -85,13 +90,15 @@ export default function ChatPage() {
 
   const loadAccountSession = async () => {
     if (!supabase || !user) return;
-    const { data } = await supabase
-      .from("sessions").select("*")
-      .eq("id", sessionId).eq("user_id", user.id).single();
-    if (data) {
-      setMessages(data.state?.messages || []);
-      setActiveAgent(data.agent_name || "build");
-    }
+    try {
+      const { data } = await supabase
+        .from("sessions").select("*")
+        .eq("id", sessionId).eq("user_id", user.id).single();
+      if (data) {
+        setMessages(data.state?.messages || []);
+        setActiveAgent(data.agent_name || "build");
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -115,12 +122,14 @@ export default function ChatPage() {
         saveGuestSession(sessions[idx]);
       }
     } else if (supabase && user) {
-      await supabase.from("sessions").update({
-        state: { messages: updated },
-        message_count: updated.length,
-        agent_name: activeAgent,
-        updated_at: new Date().toISOString(),
-      }).eq("id", sessionId);
+      try {
+        await supabase.from("sessions").update({
+          state: { messages: updated },
+          message_count: updated.length,
+          agent_name: activeAgent,
+          updated_at: new Date().toISOString(),
+        }).eq("id", sessionId);
+      } catch {}
     }
   };
 
@@ -158,19 +167,18 @@ export default function ChatPage() {
       });
       const data = await res.json();
       const reply: Message = data.error
-        ? { role: "assistant", content: `⚠️ ${data.error}` }
-        : { role: "assistant", content: data.content || "(empty)", metadata: data.metadata };
+        ? { role: "assistant", content: `Error: ${data.error}` }
+        : { role: "assistant", content: data.content || "(empty response)", metadata: data.metadata };
 
       const withReply = [...updated, reply];
       setMessages(withReply);
       await saveMessages(withReply);
 
-      // Track usage
       const estTokens = Math.ceil((userMsg.content.length + reply.content.length) / 4);
       const usage = trackUsage(1, estTokens);
       if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
     } catch (err: any) {
-      const withErr = [...updated, { role: "assistant" as const, content: `⚠️ ${err.message}` }];
+      const withErr = [...updated, { role: "assistant" as const, content: `Error: ${err.message}` }];
       setMessages(withErr);
       await saveMessages(withErr);
     } finally {
@@ -178,7 +186,6 @@ export default function ChatPage() {
     }
   };
 
-  // Voice
   const toggleVoice = () => {
     if (!voiceSupported) { toast("Voice not supported in this browser", "error"); return; }
     if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); return; }
@@ -199,7 +206,6 @@ export default function ChatPage() {
     setIsRecording(true);
   };
 
-  // Image
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -209,7 +215,12 @@ export default function ChatPage() {
     reader.readAsDataURL(file);
   };
 
-  const copyMsg = (c: string) => { navigator.clipboard.writeText(c); toast("Copied!", "success"); };
+  const copyMsg = (c: string, idx: number) => {
+    navigator.clipboard.writeText(c);
+    setCopiedIdx(idx);
+    toast("Copied", "success");
+    setTimeout(() => setCopiedIdx(null), 1500);
+  };
 
   const regenerate = async () => {
     if (sending || messages.length < 2) return;
@@ -224,29 +235,31 @@ export default function ChatPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-8 w-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="h-screen flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
 
+  const activeAgentMeta = AGENTS.find((a) => a.id === activeAgent);
+
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
-      <div className="orb orb-1" style={{ opacity: 0.08 }} />
+      <div className="orb orb-1" style={{ opacity: 0.5 }} />
       <Toaster />
 
       {/* Header */}
-      <header className="glass-strong border-b border-white/5 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 relative z-20">
+      <header className="glass-strong border-b border-white/10 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 relative z-20">
         <div className="flex items-center gap-2">
           <button onClick={() => router.push("/dashboard")}
-            className="glass-btn p-2 rounded-lg" title="Back">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            className="glass-btn p-2 rounded-lg text-zinc-400 hover:text-white" title="Back">
+            <ArrowLeftIcon size={15} />
           </button>
-          <div className="hidden sm:block">
-            <div className="text-sm font-medium text-white">{messages.length > 0 ? messages[0].content.slice(0, 40) + "..." : "New Chat"}</div>
-            <div className="text-[10px] text-gray-500">{messages.length} messages</div>
+          <div className="hidden sm:block min-w-0">
+            <div className="text-[13px] font-medium text-white truncate max-w-[280px]">
+              {messages.length > 0 && messages[0].content ? messages[0].content.slice(0, 40) + "…" : "New chat"}
+            </div>
+            <div className="text-[10px] text-zinc-600">{messages.length} messages</div>
           </div>
         </div>
 
@@ -254,28 +267,26 @@ export default function ChatPage() {
           {/* Agent picker */}
           <div className="relative">
             <button onClick={() => setShowAgentPicker(!showAgentPicker)}
-              className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-white">
-              <span>{AGENTS.find((a) => a.id === activeAgent)?.icon}</span>
-              <span className="hidden sm:inline">{AGENTS.find((a) => a.id === activeAgent)?.name}</span>
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white">
+              {activeAgentMeta?.icon}
+              <span className="hidden sm:inline">{activeAgentMeta?.name}</span>
+              <ChevronDownIcon size={12} className="text-zinc-500" />
             </button>
             {showAgentPicker && (
-              <div className="absolute right-0 top-full mt-2 w-56 glass-strong rounded-2xl shadow-2xl z-50 py-2 animate-scale-in">
-                <div className="px-4 py-1.5 text-[10px] uppercase tracking-wide text-gray-500">Free Agents</div>
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0e0e10] shadow-2xl z-50 py-1.5 animate-scale-in overflow-hidden">
+                <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-zinc-600">Free agents</div>
                 {AGENTS.map((a) => (
                   <button key={a.id}
                     onClick={() => { setActiveAgent(a.id); setShowAgentPicker(false); }}
-                    className={`w-full text-left px-4 py-2.5 hover:bg-white/5 flex items-center gap-3 transition-colors ${
-                      activeAgent === a.id ? "text-indigo-400" : "text-white"
+                    className={`w-full text-left px-4 py-2 hover:bg-white/[0.05] flex items-center gap-3 transition-colors ${
+                      activeAgent === a.id ? "text-white" : "text-zinc-400"
                     }`}>
-                    <span className="text-lg">{a.icon}</span>
+                    {a.icon}
                     <div>
-                      <div className="text-sm font-medium">{a.name}</div>
-                      <div className="text-[10px] text-gray-500">{a.id}</div>
+                      <div className="text-[13px] font-medium">{a.name}</div>
+                      <div className="text-[10px] text-zinc-600">{a.id}</div>
                     </div>
-                    {activeAgent === a.id && <span className="ml-auto text-indigo-400">✓</span>}
+                    {activeAgent === a.id && <CheckIcon size={13} className="ml-auto text-white" />}
                   </button>
                 ))}
               </div>
@@ -283,9 +294,9 @@ export default function ChatPage() {
           </div>
 
           <button onClick={() => setShowUsage(!showUsage)}
-            className="glass-btn p-2 rounded-lg" title="Usage">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            className="glass-btn p-2 rounded-lg text-zinc-400 hover:text-white" title="Usage">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </button>
         </div>
@@ -300,9 +311,10 @@ export default function ChatPage() {
 
       {/* Limit banner */}
       {limitReached && (
-        <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border-b border-red-500/20 px-4 py-2.5 text-sm text-red-400 flex items-center justify-center gap-2 animate-fade-in">
-          ⚠️ Daily message limit reached. Resets at midnight.{" "}
-          <Link href="/register" className="underline text-indigo-400">Upgrade</Link>
+        <div className="bg-white/[0.04] border-b border-white/10 px-4 py-2.5 text-[13px] text-zinc-300 flex items-center justify-center gap-2 animate-fade-in">
+          <AlertIcon size={13} className="text-zinc-500" />
+          Daily message limit reached. Resets at midnight.
+          <Link href="/register" className="underline text-white">Upgrade</Link>
         </div>
       )}
 
@@ -311,17 +323,17 @@ export default function ChatPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-up">
-              <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mb-5 animate-pulse-glow">
-                <span className="text-4xl">🤖</span>
+              <div className="h-14 w-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center mb-5 text-zinc-400">
+                <BotIcon size={24} />
               </div>
-              <h2 className="text-2xl font-bold mb-2">What can I help with?</h2>
-              <p className="text-gray-500 text-sm mb-8 max-w-md">
+              <h2 className="text-xl font-semibold mb-2 text-white">What can I help with?</h2>
+              <p className="text-zinc-500 text-sm mb-8 max-w-md">
                 Chat with your free opencode agent. Voice input, images, and persistent memory available.
               </p>
-              <div className="grid sm:grid-cols-2 gap-3 max-w-xl w-full">
+              <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl w-full">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s} onClick={() => setInput(s)}
-                    className={`glass-card p-4 text-left text-sm text-gray-400 hover:text-white animate-fade-up stagger-${i + 1}`}>
+                    className={`rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] p-3.5 text-left text-[13px] text-zinc-400 hover:text-white transition-colors animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
                     {s}
                   </button>
                 ))}
@@ -332,41 +344,37 @@ export default function ChatPage() {
           {messages.map((msg, i) => (
             <div key={i} className="mb-5 group animate-message-in">
               <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`shrink-0 h-8 w-8 rounded-xl flex items-center justify-center text-xs font-bold ${
+                <div className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center ${
                   msg.role === "user"
-                    ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20"
-                    : "glass text-indigo-400"
+                    ? "bg-white text-black text-[10px] font-semibold"
+                    : "border border-white/10 bg-white/[0.05] text-zinc-400"
                 }`}>
-                  {msg.role === "user" ? "You" : "🤖"}
+                  {msg.role === "user" ? "You" : <BotIcon size={14} />}
                 </div>
 
                 <div className={`flex-1 min-w-0 ${msg.role === "user" ? "flex justify-end" : ""}`}>
                   <div className={`inline-block max-w-full rounded-2xl px-4 py-3 ${
                     msg.role === "user"
-                      ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20"
-                      : "glass-card !rounded-2xl text-gray-200"
+                      ? "bg-white text-black text-[14px]"
+                      : "border border-white/[0.08] bg-white/[0.02] text-zinc-200"
                   }`}>
-                    {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-xl mb-2" />}
+                    {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-lg mb-2 border border-white/10" />}
                     <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
                   </div>
 
                   {msg.role === "assistant" && (
-                    <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                      <button onClick={() => copyMsg(msg.content)}
-                        className="glass-btn p-1.5 rounded-md text-gray-500 hover:text-white" title="Copy">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
+                    <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <button onClick={() => copyMsg(msg.content, i)}
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Copy">
+                        {copiedIdx === i ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                       </button>
                       <button onClick={regenerate} disabled={sending}
-                        className="glass-btn p-1.5 rounded-md text-gray-500 hover:text-white disabled:opacity-30" title="Regenerate">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30" title="Regenerate">
+                        <RefreshIcon size={13} />
                       </button>
-                      <button onClick={() => copyMsg(msg.content)}
-                        className="glass-btn p-1.5 rounded-md text-gray-500 hover:text-white" title="Like">
-                        👍
+                      <button onClick={() => copyMsg(msg.content, i)}
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Good response">
+                        <ThumbsUpIcon size={13} />
                       </button>
                     </div>
                   )}
@@ -377,12 +385,14 @@ export default function ChatPage() {
 
           {sending && (
             <div className="flex gap-3 mb-5 animate-message-in">
-              <div className="shrink-0 h-8 w-8 rounded-xl glass flex items-center justify-center text-xs">🤖</div>
-              <div className="glass-card !rounded-2xl px-5 py-4">
+              <div className="shrink-0 h-7 w-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-zinc-400">
+                <BotIcon size={14} />
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.02] rounded-2xl px-4 py-3.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full typing-dot" />
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full typing-dot" />
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
                 </div>
               </div>
             </div>
@@ -392,59 +402,53 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/5 bg-gray-950/80 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
+      <div className="border-t border-white/[0.08] bg-[#09090b]/95 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto">
           {attachedImage && (
             <div className="mb-2 relative inline-block animate-scale-in">
               <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-white/10" />
               <button onClick={() => setAttachedImage(null)}
-                className="absolute -top-2 -right-2 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600 transition-colors">×</button>
+                className="absolute -top-2 -right-2 h-5 w-5 bg-white text-black rounded-full flex items-center justify-center text-xs hover:bg-zinc-200 transition-colors font-medium">×</button>
             </div>
           )}
 
-          <div className="glass-input flex items-end gap-2 rounded-2xl px-3 py-2 focus-within:border-indigo-500/50">
+          <div className="glass-input flex items-end gap-2 rounded-2xl px-3 py-2 focus-within:border-white/25">
             <button onClick={() => fileInputRef.current?.click()}
-              className="glass-btn p-2 rounded-lg text-gray-400 hover:text-white shrink-0" title="Upload image">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors shrink-0" title="Upload image">
+              <ImageIcon size={18} />
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
 
             <textarea ref={textareaRef} value={input}
               onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-              placeholder={`Message ${AGENTS.find((a) => a.id === activeAgent)?.name}...`}
+              placeholder={`Message ${activeAgentMeta?.name}…`}
               rows={1} disabled={sending || limitReached}
-              className="flex-1 bg-transparent resize-none text-sm text-white placeholder-gray-500 focus:outline-none max-h-[200px] py-1.5" />
+              className="flex-1 bg-transparent resize-none text-sm text-white placeholder-zinc-600 focus:outline-none max-h-[200px] py-1.5" />
 
             <button onClick={toggleVoice}
               className={`p-2 rounded-lg transition-all shrink-0 ${
-                isRecording ? "bg-red-500/20 text-red-400 animate-pulse" : "glass-btn text-gray-400 hover:text-white"
+                isRecording ? "bg-red-500/15 text-red-400 animate-pulse" : "text-zinc-500 hover:text-white"
               }`} title="Voice input">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
+              <MicIcon size={18} />
             </button>
 
             <button onClick={sendMessage}
               disabled={sending || (!input.trim() && !attachedImage) || limitReached}
               className={`p-2 rounded-lg transition-all shrink-0 ${
                 sending || (!input.trim() && !attachedImage) || limitReached
-                  ? "bg-gray-800 text-gray-600"
-                  : "glass-btn-primary text-white"
+                  ? "bg-white/[0.06] text-zinc-700"
+                  : "bg-white text-black hover:bg-zinc-200"
               }`} title="Send (Enter)">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              <SendIcon size={17} />
             </button>
           </div>
 
           <div className="flex items-center justify-between mt-2 px-1">
-            <div className="text-[10px] text-gray-600">
-              {isRecording ? <span className="text-red-400 animate-pulse">● Recording...</span> :
-                <>Enter to send · Shift+Enter newline {voiceSupported && "· 🎤 voice"}</>}
+            <div className="text-[10px] text-zinc-700">
+              {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
+                <>Enter to send · Shift+Enter newline{voiceSupported && " · voice input available"}</>}
             </div>
-            <div className="text-[10px] text-gray-600">Powered by opencode</div>
+            <div className="text-[10px] text-zinc-700">Powered by opencode</div>
           </div>
         </div>
       </div>

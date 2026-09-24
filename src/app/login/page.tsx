@@ -37,49 +37,46 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
       <div className="orb orb-1" />
-      <div className="orb orb-2" />
 
-      <div className="w-full max-w-md relative z-10 animate-scale-in">
-        {/* Logo */}
+      <div className="w-full max-w-sm relative z-10 animate-scale-in">
+        {/* Header */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6 group">
-            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/50 transition-shadow">
-              F
-            </div>
-            <span className="font-semibold text-lg">Founda CRM</span>
+          <Link href="/" className="inline-flex items-center gap-2 mb-6">
+            <span className="font-semibold text-lg text-white tracking-tight">Founda</span>
+            <span className="text-sm text-zinc-600">CRM</span>
           </Link>
-          <h1 className="text-3xl font-bold mb-2">Welcome back</h1>
-          <p className="text-gray-400">Sign in to your persistent AI workspace</p>
+          <h1 className="text-2xl font-semibold mb-1.5 text-white">Welcome back</h1>
+          <p className="text-zinc-500 text-sm">Sign in to your persistent AI workspace</p>
         </div>
 
         {/* Card */}
-        <div className="glass-card p-8">
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="animate-fade-up stagger-1">
-              <label className="block text-sm text-gray-300 mb-1.5 font-medium">Email</label>
+              <label className="block text-[13px] text-zinc-400 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="glass-input w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 text-sm"
+                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-zinc-600 text-sm"
                 placeholder="you@example.com"
               />
             </div>
             <div className="animate-fade-up stagger-2">
-              <label className="block text-sm text-gray-300 mb-1.5 font-medium">Password</label>
+              <label className="block text-[13px] text-zinc-400 mb-1.5">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="glass-input w-full px-4 py-3 rounded-xl text-white placeholder-gray-500 text-sm"
-                placeholder="••••••••"
+                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-zinc-600 text-sm"
+                placeholder="Your password"
               />
             </div>
 
             {error && (
-              <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 animate-fade-in">
+              <div className="text-red-400 text-[13px] bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5 animate-fade-in">
                 {error}
               </div>
             )}
@@ -87,37 +84,37 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="glass-btn-primary w-full py-3.5 rounded-xl font-medium text-white text-sm animate-fade-up stagger-3"
+              className="glass-btn-primary w-full py-2.5 rounded-xl text-sm animate-fade-up stagger-3"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
+                  <span className="h-3.5 w-3.5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  Signing in…
                 </span>
               ) : (
-                "Sign In"
+                "Sign in"
               )}
             </button>
           </form>
 
           <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-gray-700" />
-            <span className="text-xs text-gray-500">or</span>
-            <div className="flex-1 h-px bg-gray-700" />
+            <div className="flex-1 h-px bg-white/[0.08]" />
+            <span className="text-[11px] text-zinc-600">or</span>
+            <div className="flex-1 h-px bg-white/[0.08]" />
           </div>
 
           <button onClick={handleGuest}
-            className="glass-btn w-full py-3.5 rounded-xl font-medium text-gray-300 text-sm hover:text-white animate-fade-up stagger-4">
-            👻 Continue as Guest
+            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] transition-all animate-fade-up stagger-4">
+            Continue as guest
           </button>
-          <p className="text-[11px] text-gray-600 text-center mt-2">
+          <p className="text-[11px] text-zinc-700 text-center mt-2.5">
             Guest mode: no account needed, but chats are not saved permanently.
           </p>
         </div>
 
-        <p className="text-center text-sm text-gray-400 mt-6 animate-fade-up stagger-5">
+        <p className="text-center text-[13px] text-zinc-500 mt-5 animate-fade-up stagger-5">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-indigo-400 hover:text-indigo-300 font-medium">
+          <Link href="/register" className="text-white hover:text-zinc-300 font-medium">
             Create one free
           </Link>
         </p>

@@ -16,23 +16,14 @@ const ICON = (size = 24, className = "") => (
   </svg>
 );
 
-export const Logo = ({ size = 32, withText = false }: { size?: number; withText?: boolean }) => (
-  <div className="flex items-center gap-2.5">
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="16" fill="#030712" />
-      <rect x="1" y="1" width="62" height="62" rx="15" stroke="url(#logo-g)" strokeWidth="2" strokeOpacity="0.3" />
-      <path d="M20 44V20h6l12 16V20h6v24h-6L26 28v16h-6z" fill="url(#logo-g)" />
-      <circle cx="48" cy="20" r="4" fill="#22d3ee" />
-      <defs>
-        <linearGradient id="logo-g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="0.5" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#22d3ee" />
-        </linearGradient>
-      </defs>
-    </svg>
-    {withText && <span className="font-semibold tracking-tight text-white">Founda CRM</span>}
-  </div>
+// Text-only wordmark — no logo mark
+export const Logo = ({ size = 32, withText = true }: { size?: number; withText?: boolean }) => (
+  <span
+    className="font-semibold tracking-tight text-white select-none"
+    style={{ fontSize: Math.max(14, Math.round(size * 0.5)) }}
+  >
+    {withText ? "Founda" : ""}
+  </span>
 );
 
 // ── SVG Icons (no emoji) ──
@@ -324,18 +315,74 @@ export const MenuIcon = ({ size = 20, className = "" }) => (
 );
 
 export const LogoWordmark = ({ className = "" }: { className?: string }) => (
-  <svg viewBox="0 0 160 32" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <rect width="32" height="32" rx="8" fill="#030712" />
-    <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" stroke="url(#wm-g)" strokeOpacity="0.3" />
-    <path d="M10 24V10h3l6 8V10h3v14h-3l-6-8v8h-3z" fill="url(#wm-g)" />
-    <circle cx="26" cy="10" r="2" fill="#22d3ee" />
-    <text x="40" y="22" fill="white" fontSize="16" fontWeight="600" fontFamily="system-ui, sans-serif">Founda CRM</text>
-    <defs>
-      <linearGradient id="wm-g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#6366f1" />
-        <stop offset="0.5" stopColor="#8b5cf6" />
-        <stop offset="1" stopColor="#22d3ee" />
-      </linearGradient>
-    </defs>
+  <span className={`font-semibold tracking-tight text-white ${className}`}>Founda</span>
+);
+
+// ── Extra icons needed across the app ──
+
+export const MailIcon = ({ size = 20, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="M22 7l-10 6L2 7" />
+  </svg>
+);
+
+export const AlertIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+export const CheckCircleIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+export const XCircleIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="15" y1="9" x2="9" y2="15" />
+    <line x1="9" y1="9" x2="15" y2="15" />
+  </svg>
+);
+
+export const InfoIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+);
+
+export const ThumbsUpIcon = ({ size = 14, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3z" />
+    <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
+  </svg>
+);
+
+export const PlusIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+export const LogOutIcon = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
+export const GaugeIcon = ({ size = 20, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 2a10 10 0 0110 10 10 10 0 01-10 10A10 10 0 012 12 10 10 0 0112 2z" />
+    <path d="M12 12l4-4" />
   </svg>
 );
