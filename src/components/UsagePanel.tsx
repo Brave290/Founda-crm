@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { CheckCircleIcon, XCircleIcon, InfoIcon } from "@/components/icons";
 
 // ── Usage tracking (localStorage for guests, Supabase for logged in) ──
 
@@ -207,7 +208,7 @@ export function useToast() {
           <span className={
             t.type === "success" ? "text-emerald-400" : t.type === "error" ? "text-red-400" : "text-zinc-400"
           }>
-            {t.type === "success" ? "✓" : t.type === "error" ? "✕" : "i"}
+            {t.type === "success" ? <CheckCircleIcon size={16} /> : t.type === "error" ? <XCircleIcon size={16} /> : <InfoIcon size={16} />}
           </span>
           <span className="text-zinc-200">{t.message}</span>
         </div>
