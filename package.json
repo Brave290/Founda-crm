@@ -1,0 +1,44 @@
+{
+  "name": "founda-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run --passWithNoTests",
+    "export": "next build",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios",
+    "apk": "npm run export && npx cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "next": "14.2.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@supabase/ssr": "^0.3.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@opencode-ai/sdk": "^1.18.30",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/cli": "^6.1.0",
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/ios": "^6.1.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/keyboard": "^6.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.2.4",
+    "tailwindcss": "^3.4.1",
+    "postcss": "^8.4.35",
+    "autoprefixer": "^10.4.17",
+    "vitest": "^1.3.0"
+  }
+}

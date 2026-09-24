@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts.env.local
+.env
+.vercel
+*.log
+out/
+android/
+ios/
