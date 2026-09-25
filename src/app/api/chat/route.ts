@@ -296,13 +296,34 @@ function streamRun(prep: Prep): Response {
         } else if (type === "message.updated") {
           const info = props.info;
           if (info?.id && info?.role === "assistant") assistantIds.add(info.id);
+        } else if (type === "message.part.delta") {
+          // incremental text (legacy stream)
+          if (
+            typeof props.delta === "string" && props.delta &&
+            (!props.field || props.field === "text") &&
+            props.messageID && assistantIds.has(props.messageID)
+          ) {
+            const key = props.partID || props.messageID;
+            textParts.set(key, (textParts.get(key) || "") + props.delta);
+            markText();
+          }
+        } else if (type === "session.next.text.delta") {
+          if (typeof props.delta === "string" && props.delta && props.sessionID) {
+            const key = props.textID || props.assistantMessageID || "next";
+            textParts.set(key, (textParts.get(key) || "") + props.delta);
+            markText();
+          }
         } else if (type === "message.part.updated") {
           const part = props.part;
           if (!part) return;
-          if (part.type === "text" && !part.synthetic && typeof part.text === "string" && part.messageID) {
+          if (part.type === "text" && !part.synthetic && typeof part.text === "string" && part.text && part.messageID) {
             if (assistantIds.has(part.messageID)) {
-              textParts.set(part.id, part.text);
-              markText();
+              // authoritative accumulated text; never regress a longer value
+              const cur = textParts.get(part.id) || "";
+              if (part.text.length >= cur.length) {
+                textParts.set(part.id, part.text);
+                markText();
+              }
             }
           } else if (part.type === "tool") {
             const step = stepFromPart(part);
