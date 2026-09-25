@@ -364,7 +364,6 @@ function streamRun(prep: Prep): Response {
           const out = await prep.runWithRecovery();
           flushText();
           if (activityDirty) flushActivity();
-          send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
           send("done", {
             content: out.content,
             sessionId: prep.ocSession(),
@@ -381,6 +380,12 @@ function streamRun(prep: Prep): Response {
           send("error", { error: e?.message || "opencode error" });
           send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
         } finally {
+          // The engine may broadcast the assistant's final part update right
+          // after prompt() resolves — keep pumping briefly to catch it.
+          await new Promise((r) => setTimeout(r, 700));
+          flushText();
+          if (activityDirty) flushActivity();
+          send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
           if (activityTimer) clearTimeout(activityTimer);
           if (textTimer) clearTimeout(textTimer);
           close();
