@@ -92,7 +92,8 @@ try {
 
   if (!found) throw new Error("binary not found inside archive");
 
-  fs.renameSync(found, BIN);
+  // copy (not rename): /tmp and the build dir are different devices on Vercel
+  fs.copyFileSync(found, BIN);
   fs.chmodSync(BIN, 0o755);
   fs.rmSync(tmp, { force: true });
   fs.rmSync(extractDir, { recursive: true, force: true });

@@ -59,9 +59,10 @@ ensureRuntimeEnv();
 function binaryCandidates(): string[] {
   const home = process.env.HOME && process.env.HOME !== "undefined" ? process.env.HOME : os.homedir();
   return [...new Set([
+    // updated copy (writable, may be newer than the build-time bundle)
+    path.join(home, ".opencode", "bin", "opencode"),
     BUNDLED_BIN,
     RUNTIME_BIN,
-    path.join(home, ".opencode", "bin", "opencode"),
     path.join(os.homedir(), ".opencode", "bin", "opencode"),
   ])];
 }
@@ -118,6 +119,7 @@ export function opencodeDiagnostics() {
   try { systemPath = execSync("command -v opencode", { encoding: "utf-8", stdio: "pipe", env: process.env }).trim(); } catch {}
   return {
     cwd: process.cwd(),
+    updateState,
     home: process.env.HOME,
     binPath: getOpencodePath(),
     candidates,
@@ -125,6 +127,99 @@ export function opencodeDiagnostics() {
     buildInfo,
     pathHead: (process.env.PATH || "").split(":").slice(0, 4),
   };
+}
+
+// --- Self-update: each instance checks GitHub (at most once per 24h) and
+// --- fetches newer releases into the writable home dir. The running server
+// --- keeps its binary; the update takes effect on the next spawn/instance.
+
+let updateState: "idle" | "running" | "done" = "idle";
+
+function normVer(v: string) { return v.replace(/^v/, ""); }
+
+function semverLt(a: string, b: string): boolean {
+  const pa = normVer(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = normVer(b).split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x < y) return true;
+    if (x > y) return false;
+  }
+  return false;
+}
+
+async function fetchLatestTag(): Promise<string | null> {
+  // GitHub redirects /releases/latest to /tag/vX.Y.Z — no API quota needed
+  const res = await fetch("https://github.com/anomalyco/opencode/releases/latest", {
+    redirect: "manual",
+    signal: AbortSignal.timeout(8000),
+  });
+  const loc = res.headers.get("location") || "";
+  const m = loc.match(/\/tag\/(v?\d+\.\d+\.\d+)/);
+  return m ? m[1] : null;
+}
+
+export async function maybeAutoUpdate(): Promise<void> {
+  if (updateState !== "idle") return;
+  updateState = "running";
+  try {
+    const home = process.env.HOME!;
+    const tsFile = path.join(home, ".opencode", "last-update-check");
+    let last = 0;
+    try { last = Number(fs.readFileSync(tsFile, "utf8")) || 0; } catch {}
+    if (Date.now() - last < 24 * 60 * 60 * 1000) { updateState = "done"; return; }
+    try { fs.writeFileSync(tsFile, String(Date.now())); } catch {}
+
+    const latest = await fetchLatestTag();
+    if (!latest) { updateState = "done"; return; }
+
+    let current = getOpencodeVersion();
+    if (!current) {
+      try {
+        const info = fs.readFileSync(path.join(BUNDLED_BIN, "..", "build-info.txt"), "utf8");
+        current = info.match(/version=(\S+)/)?.[1] || OPENCODE_VERSION;
+      } catch { current = OPENCODE_VERSION; }
+    }
+    if (!semverLt(current, latest)) { updateState = "done"; return; }
+
+    logSafe(`update available: ${normVer(current)} -> ${normVer(latest)}; fetching`);
+    const key = `${process.platform}-${process.arch}`;
+    const assets: Record<string, string> = {
+      "linux-x64": "opencode-linux-x64.tar.gz",
+      "linux-arm64": "opencode-linux-arm64.tar.gz",
+      "darwin-x64": "opencode-darwin-x64.tar.gz",
+      "darwin-arm64": "opencode-darwin-arm64.tar.gz",
+    };
+    const asset = assets[key];
+    if (!asset) { updateState = "done"; return; }
+
+    const tag = latest.startsWith("v") ? latest : `v${latest}`;
+    const url = `https://github.com/anomalyco/opencode/releases/download/${tag}/${asset}`;
+    const tar = path.join(os.tmpdir(), `oc-update-${Date.now()}.tar.gz`);
+    const extract = path.join(os.tmpdir(), `oc-update-x-${Date.now()}`);
+    fs.mkdirSync(extract, { recursive: true });
+    try {
+      execSync(`curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 -o "${tar}" "${url}"`, {
+        stdio: "pipe", timeout: 320_000, shell: "/bin/bash", env: process.env,
+      });
+      execSync(`tar -xzf "${tar}" -C "${extract}"`, { stdio: "pipe", timeout: 60_000 });
+      const found = findBinary(extract, 0);
+      if (!found) throw new Error("binary not in archive");
+      const binDir = path.join(home, ".opencode", "bin");
+      fs.mkdirSync(binDir, { recursive: true });
+      const dest = path.join(binDir, "opencode");
+      fs.copyFileSync(found, dest); // copy: devices may differ
+      fs.chmodSync(dest, 0o755);
+      logSafe(`opencode self-updated to ${normVer(latest)} (active on next spawn/instance)`);
+    } finally {
+      fs.rmSync(tar, { force: true });
+      fs.rmSync(extract, { recursive: true, force: true });
+    }
+  } catch (e: any) {
+    logSafe(`self-update skipped: ${e.message}`);
+  } finally {
+    updateState = "done";
+  }
 }
 
 export async function installOpencode(): Promise<{ success: boolean; message: string }> {
@@ -168,7 +263,7 @@ export async function installOpencode(): Promise<{ success: boolean; message: st
     const found = findBinary(extract, 0);
     if (!found) throw new Error("binary not found in archive");
     const dest = path.join(binDir, "opencode");
-    fs.renameSync(found, dest);
+    fs.copyFileSync(found, dest);
     fs.chmodSync(dest, 0o755);
     fs.rmSync(tar, { force: true });
     fs.rmSync(extract, { recursive: true, force: true });
@@ -199,6 +294,7 @@ export async function upgradeOpencode(): Promise<{ success: boolean; message: st
 
 export async function ensureServer(): Promise<OpencodeClient> {
   ensureRuntimeEnv();
+  void maybeAutoUpdate(); // background, at most one check per 24h per instance
 
   if (client) {
     try {
