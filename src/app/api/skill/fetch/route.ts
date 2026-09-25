@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   const max = Math.min(Math.max(Number(body.max) || 8000, 500), 20_000);
 
   // 1) Reader endpoint — best markdown for articles/docs/video pages.
+  if (!body.direct)
   try {
     const res = await fetchWithRetry(
       `https://r.jina.ai/${target.toString()}`,
