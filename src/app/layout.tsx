@@ -1,3 +1,10 @@
+import "@fontsource/plus-jakarta-sans/400.css";
+import "@fontsource/plus-jakarta-sans/500.css";
+import "@fontsource/plus-jakarta-sans/600.css";
+import "@fontsource/plus-jakarta-sans/700.css";
+import "@fontsource/fraunces/500.css";
+import "@fontsource/fraunces/600.css";
+import "@fontsource/fraunces/500-italic.css";
 import "./globals.css";
 
 export const metadata = {
@@ -29,7 +36,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#0a0918",
+  themeColor: "#0b1120",
   colorScheme: "dark",
 };
 
@@ -40,7 +47,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#0a0918] text-zinc-100 antialiased">
+      <body className="bg-[#0b1120] text-slate-100 antialiased">
         <div className="orb orb-1" aria-hidden />
         <div className="orb orb-2" aria-hidden />
         <div className="orb orb-3" aria-hidden />

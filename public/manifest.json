@@ -4,8 +4,8 @@
   "description": "Persistent opencode agent manager \u2014 ChatGPT-style interface",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0918",
-  "theme_color": "#0a0918",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
   "orientation": "portrait",
   "icons": [
     {

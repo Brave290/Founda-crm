@@ -236,3 +236,17 @@ create index if not exists idx_agents_user ON public.agents(user_id);
 create index if not EXISTS idx_exports_session ON public.session_exports(session_id, version);
 create index if not exists idx_mcp_user ON public.mcp_connections(user_id);
 create index if not exists idx_activity_user ON public.activity_log(user_id, created_at desc);
+-- ── Server-side storage for guest devices (keyed by random device id) ──
+create table if not exists public.guest_data (
+  device_id uuid primary key,
+  data jsonb not null default '{}',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- RLS on, no client policies: only the service-role API routes can touch this table
+alter table public.guest_data enable row level security;
+
+drop trigger if exists guest_data_updated_at on public.guest_data;
+create trigger guest_data_updated_at before update on public.guest_data
+  for each row execute function public.update_updated_at();

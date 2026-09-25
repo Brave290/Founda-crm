@@ -12,10 +12,10 @@ import {
   CodeIcon, BarChartIcon, LockIcon, GithubIcon, ClipboardIcon,
 } from "@/components/icons";
 
-const TILE = "h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/20 border border-violet-400/30 flex items-center justify-center text-violet-200";
+const TILE = "h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-200";
 
 export default function Home() {
-  const { user, guest, loading, continueAsGuest } = useAuth();
+  const { continueAsGuest } = useAuth();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -27,9 +27,28 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Landing page always renders — sign-in/guest entry happens via explicit CTAs
+
   useEffect(() => {
-    if (mounted && !loading && (user || guest)) router.replace("/dashboard");
-  }, [mounted, loading, user, guest]);
+    const els = document.querySelectorAll("[data-reveal]");
+    if (!("IntersectionObserver" in window)) {
+      els.forEach((el) => el.classList.add("in"));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   const handleGuest = () => {
     continueAsGuest();
@@ -37,7 +56,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden bg-[#0a0918]">
+    <div className="min-h-screen text-white relative overflow-hidden bg-[#0b1120]">
 
       {/* ── Navigation ── */}
       <nav
@@ -48,28 +67,28 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <span className="font-semibold tracking-tight text-[15px]">Founda</span>
-            <span className="text-[13px] text-zinc-500 hidden sm:inline">CRM</span>
+            <span className="text-[13px] text-slate-500 hidden sm:inline">CRM</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-7">
-            <a href="#features" className="text-[13px] text-zinc-400 hover:text-white transition-colors">
+            <a href="#features" className="text-[13px] text-slate-400 hover:text-white transition-colors">
               Features
             </a>
-            <a href="#agents" className="text-[13px] text-zinc-400 hover:text-white transition-colors">
+            <a href="#agents" className="text-[13px] text-slate-400 hover:text-white transition-colors">
               Agents
             </a>
-            <a href="#install" className="text-[13px] text-zinc-400 hover:text-white transition-colors">
+            <a href="#install" className="text-[13px] text-slate-400 hover:text-white transition-colors">
               Install
             </a>
             <a href="https://github.com/Brave290/Founda-crm" target="_blank" rel="noopener noreferrer"
-              className="text-[13px] text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5">
+              className="text-[13px] text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
               <GithubIcon size={15} />
               GitHub
             </a>
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Link href="/login" className="px-3.5 py-1.5 rounded-lg text-[13px] text-zinc-300 hover:text-white hover:bg-white/5 transition-all">
+            <Link href="/login" className="px-3.5 py-1.5 rounded-lg text-[13px] text-slate-300 hover:text-white hover:bg-white/5 transition-all">
               Sign in
             </Link>
             <Link href="/register" className="glass-btn-primary px-4 py-1.5 rounded-lg text-[13px]">
@@ -82,7 +101,7 @@ export default function Home() {
       {/* ── Hero ── */}
       <section className="relative z-10 max-w-6xl mx-auto px-6 pt-36 pb-20">
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-[12px] text-zinc-400 mb-8 animate-fade-up">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-[12px] text-slate-400 mb-8 animate-fade-up">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
@@ -90,13 +109,13 @@ export default function Home() {
             Free agents, no API keys required
           </div>
 
-          <h1 className="text-[44px] sm:text-6xl md:text-7xl font-semibold leading-[1.05] tracking-tight mb-6 animate-fade-up stagger-1">
+          <h1 className="font-display text-[44px] sm:text-6xl md:text-7xl font-semibold leading-[1.05] tracking-tight mb-6 animate-fade-up stagger-1">
             The workspace that
             <br />
             <span className="gradient-text">remembers everything.</span>
           </h1>
 
-          <p className="text-zinc-400 text-lg sm:text-xl max-w-2xl mb-10 leading-relaxed animate-fade-up stagger-2">
+          <p className="text-slate-400 text-lg sm:text-xl max-w-2xl mb-10 leading-relaxed animate-fade-up stagger-2">
             A ChatGPT-style persistent interface for opencode agents. Voice input,
             image upload, session export, MCP tools, usage tracking — installable
             on any device.
@@ -112,14 +131,14 @@ export default function Home() {
             </Link>
             <button
               onClick={handleGuest}
-              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-zinc-300 hover:text-white w-full sm:w-auto flex items-center justify-center gap-2"
+              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-slate-300 hover:text-white w-full sm:w-auto flex items-center justify-center gap-2"
             >
               <GhostIcon size={16} />
               Try without account
             </button>
           </div>
 
-          <p className="text-xs text-zinc-600 animate-fade-up stagger-4">
+          <p className="text-xs text-slate-600 animate-fade-up stagger-4">
             Guest mode available. Sessions persist only when signed in.
           </p>
 
@@ -130,7 +149,7 @@ export default function Home() {
                 <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
                 <div className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
                 <div className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-                <div className="ml-3 text-[11px] text-zinc-600">founda — dashboard</div>
+                <div className="ml-3 text-[11px] text-slate-600">founda — dashboard</div>
               </div>
               <div className="p-5 grid grid-cols-3 gap-4">
                 <div className="col-span-2 space-y-3">
@@ -142,33 +161,33 @@ export default function Home() {
                       <div className="text-[13px] text-white">Build agent</div>
                       <div className="ml-auto text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">FREE</div>
                     </div>
-                    <div className="text-[13px] text-zinc-500 leading-relaxed">
+                    <div className="text-[13px] text-slate-500 leading-relaxed">
                       Analyzing your codebase structure…
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center gap-3">
-                    <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[10px] font-semibold text-white">Y</div>
-                    <div className="text-[13px] text-zinc-400">Refactor the auth module and add tests</div>
+                    <div className="h-6 w-6 rounded-md bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-[10px] font-semibold text-white">Y</div>
+                    <div className="text-[13px] text-slate-400">Refactor the auth module and add tests</div>
                   </div>
                   <div className="flex items-center gap-2 px-2">
-                    <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[13px] text-zinc-600">
+                    <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[13px] text-slate-600">
                       Message Build…
                     </div>
-                    <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-600/35">
+                    <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-600/35">
                       <PlayIcon size={12} className="text-white" />
                     </div>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                    <div className="text-[11px] text-zinc-600 mb-2">Daily usage</div>
+                    <div className="text-[11px] text-slate-600 mb-2">Daily usage</div>
                     <div className="text-xl font-semibold text-white">12 / 1M</div>
                     <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
-                      <div className="h-full w-1/4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full" />
+                      <div className="h-full w-1/4 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" />
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                    <div className="text-[11px] text-zinc-600 mb-2">Resets in</div>
+                    <div className="text-[11px] text-slate-600 mb-2">Resets in</div>
                     <div className="text-sm font-mono text-white">07:42:18</div>
                   </div>
                 </div>
@@ -180,7 +199,7 @@ export default function Home() {
 
       {/* ── Social proof strip ── */}
       <section className="relative z-10 border-y border-white/[0.06] py-7">
-        <div className="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-zinc-600 text-[13px]">
+        <div className="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-slate-600 text-[13px]">
           <div className="flex items-center gap-2"><ServerIcon size={15} /><span>opencode SDK</span></div>
           <div className="flex items-center gap-2"><DatabaseIcon size={15} /><span>Supabase</span></div>
           <div className="flex items-center gap-2"><GithubIcon size={15} /><span>GitHub sync</span></div>
@@ -190,13 +209,13 @@ export default function Home() {
       </section>
 
       {/* ── Features grid ── */}
-      <section id="features" className="relative z-10 max-w-6xl mx-auto px-6 py-24">
+      <section id="features" className="relative z-10 max-w-6xl mx-auto px-6 py-24" data-reveal>
         <div className="max-w-2xl mb-14">
-          <div className="text-[12px] uppercase tracking-widest text-zinc-500 mb-3">Features</div>
-          <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
+          <div className="text-[12px] uppercase tracking-widest text-slate-500 mb-3">Features</div>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
             Everything you need.
           </h2>
-          <p className="text-zinc-400 text-lg leading-relaxed">
+          <p className="text-slate-400 text-lg leading-relaxed">
             A complete workspace for managing AI agents — from creation to persistent memory.
           </p>
         </div>
@@ -251,25 +270,25 @@ export default function Home() {
           ].map((f, i) => (
             <div
               key={f.title}
-              className={`bg-white/[0.03] p-6 animate-fade-up stagger-${(i % 6) + 1} hover:bg-violet-500/[0.07] transition-colors`}
+              className={`bg-white/[0.03] p-6 animate-fade-up stagger-${(i % 6) + 1} hover:bg-emerald-500/[0.07] transition-colors`}
             >
               <div className={`${TILE} mb-4`}>{f.icon}</div>
               <h3 className="font-medium text-white mb-2 text-[15px]">{f.title}</h3>
-              <p className="text-[13px] text-zinc-500 leading-relaxed">{f.desc}</p>
+              <p className="text-[13px] text-slate-500 leading-relaxed">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── Free agents section ── */}
-      <section id="agents" className="relative z-10 border-y border-white/[0.06] bg-white/[0.01]">
+      <section id="agents" className="relative z-10 border-y border-white/[0.06] bg-white/[0.01]" data-reveal>
         <div className="max-w-6xl mx-auto px-6 py-24">
           <div className="max-w-2xl mb-14">
-            <div className="text-[12px] uppercase tracking-widest text-zinc-500 mb-3">Agents</div>
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
+            <div className="text-[12px] uppercase tracking-widest text-slate-500 mb-3">Agents</div>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
               Free agents, ready to work.
             </h2>
-            <p className="text-zinc-400 text-lg leading-relaxed">
+            <p className="text-slate-400 text-lg leading-relaxed">
               opencode ships with powerful built-in agents. They work immediately — no configuration required.
             </p>
           </div>
@@ -292,8 +311,8 @@ export default function Home() {
                     FREE
                   </span>
                 </div>
-                <p className="text-[13px] text-zinc-500 leading-relaxed mb-3">{agent.desc}</p>
-                <code className="text-[11px] text-zinc-600 font-mono bg-white/[0.04] border border-white/[0.06] rounded-md px-2 py-0.5">
+                <p className="text-[13px] text-slate-500 leading-relaxed mb-3">{agent.desc}</p>
+                <code className="text-[11px] text-slate-600 font-mono bg-white/[0.04] border border-white/[0.06] rounded-md px-2 py-0.5">
                   {agent.id}
                 </code>
               </div>
@@ -303,10 +322,10 @@ export default function Home() {
       </section>
 
       {/* ── How it works ── */}
-      <section className="relative z-10 max-w-6xl mx-auto px-6 py-24">
+      <section className="relative z-10 max-w-6xl mx-auto px-6 py-24" data-reveal>
         <div className="max-w-2xl mb-14">
-          <div className="text-[12px] uppercase tracking-widest text-zinc-500 mb-3">How it works</div>
-          <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+          <div className="text-[12px] uppercase tracking-widest text-slate-500 mb-3">How it works</div>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">
             Three steps to get started.
           </h2>
         </div>
@@ -319,27 +338,27 @@ export default function Home() {
           ].map((s, i) => (
             <div key={s.step} className={`glass-card p-6 !transform-none animate-fade-up stagger-${i + 1}`}>
               <div className="flex items-center justify-between mb-5">
-                <div className="h-10 w-10 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-300">
+                <div className="h-10 w-10 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-slate-300">
                   {s.icon}
                 </div>
-                <span className="text-[11px] font-mono text-zinc-600">{s.step}</span>
+                <span className="text-[11px] font-mono text-slate-600">{s.step}</span>
               </div>
               <h3 className="font-medium text-white mb-2 text-[15px]">{s.title}</h3>
-              <p className="text-[13px] text-zinc-500 leading-relaxed">{s.desc}</p>
+              <p className="text-[13px] text-slate-500 leading-relaxed">{s.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── Install section ── */}
-      <section id="install" className="relative z-10 border-t border-white/[0.06] bg-white/[0.01]">
+      <section id="install" className="relative z-10 border-t border-white/[0.06] bg-white/[0.01]" data-reveal>
         <div className="max-w-6xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="text-[12px] uppercase tracking-widest text-zinc-500 mb-3">Install</div>
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-5">
+            <div className="text-[12px] uppercase tracking-widest text-slate-500 mb-3">Install</div>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-5">
               Use it anywhere.
             </h2>
-            <p className="text-zinc-400 text-lg mb-8 leading-relaxed">
+            <p className="text-slate-400 text-lg mb-8 leading-relaxed">
               Founda runs as a web app, PWA, Android APK, or iOS app. Package ID{" "}
               <code className="text-white font-mono text-sm bg-white/[0.06] border border-white/10 px-1.5 py-0.5 rounded">com.hx.foundacrm</code>.
             </p>
@@ -352,22 +371,22 @@ export default function Home() {
                 { icon: <DownloadIcon size={17} />, title: "PWA", desc: "Install from browser — works offline" },
               ].map((item) => (
                 <div key={item.title} className="flex items-center gap-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-                  <div className="h-9 w-9 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-300 shrink-0">
+                  <div className="h-9 w-9 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-slate-300 shrink-0">
                     {item.icon}
                   </div>
                   <div>
                     <div className="font-medium text-white text-[14px]">{item.title}</div>
-                    <div className="text-[12px] text-zinc-500">{item.desc}</div>
+                    <div className="text-[12px] text-slate-500">{item.desc}</div>
                   </div>
                 </div>
               ))}
             </div>
 
             <div className="mt-8">
-              <code className="block text-[12px] text-zinc-500 font-mono bg-black border border-white/10 rounded-xl p-4 overflow-x-auto">
-                <span className="text-zinc-700">$</span> npm run export{" "}
-                <span className="text-zinc-700">&&</span> npx cap sync android{" "}
-                <span className="text-zinc-700">&&</span> cd android && ./gradlew assembleDebug
+              <code className="block text-[12px] text-slate-500 font-mono bg-black border border-white/10 rounded-xl p-4 overflow-x-auto">
+                <span className="text-slate-700">$</span> npm run export{" "}
+                <span className="text-slate-700">&&</span> npx cap sync android{" "}
+                <span className="text-slate-700">&&</span> cd android && ./gradlew assembleDebug
               </code>
             </div>
           </div>
@@ -385,35 +404,35 @@ export default function Home() {
                     <div className="h-5 w-5 rounded-md bg-white/10" />
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-3">
-                    <div className="text-[10px] text-zinc-600 mb-1">Daily usage</div>
+                    <div className="text-[10px] text-slate-600 mb-1">Daily usage</div>
                     <div className="text-lg font-semibold text-white">12 / 1M</div>
                     <div className="h-1.5 bg-white/10 rounded-full mt-1.5 overflow-hidden">
-                      <div className="h-full w-1/4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full" />
+                      <div className="h-full w-1/4 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                       <div className="flex items-center gap-2">
                         <div className="h-4 w-4 rounded bg-white/10 flex items-center justify-center">
-                          <WrenchIcon size={9} className="text-zinc-400" />
+                          <WrenchIcon size={9} className="text-slate-400" />
                         </div>
                         <div className="text-[11px] text-white">Build agent</div>
                       </div>
-                      <div className="text-[10px] text-zinc-600 mt-1">Ready to work</div>
+                      <div className="text-[10px] text-slate-600 mt-1">Ready to work</div>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                       <div className="flex items-center gap-2">
                         <div className="h-4 w-4 rounded bg-white/10 flex items-center justify-center">
-                          <SearchIcon size={9} className="text-zinc-400" />
+                          <SearchIcon size={9} className="text-slate-400" />
                         </div>
                         <div className="text-[11px] text-white">Explore agent</div>
                       </div>
-                      <div className="text-[10px] text-zinc-600 mt-1">Codebase search</div>
+                      <div className="text-[10px] text-slate-600 mt-1">Codebase search</div>
                     </div>
                   </div>
                   <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 flex items-center gap-2">
-                    <div className="flex-1 text-[10px] text-zinc-600">Message…</div>
-                    <div className="h-5 w-5 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+                    <div className="flex-1 text-[10px] text-slate-600">Message…</div>
+                    <div className="h-5 w-5 rounded-md bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
                       <ArrowRightIcon size={10} className="text-white" />
                     </div>
                   </div>
@@ -425,7 +444,7 @@ export default function Home() {
       </section>
 
       {/* ── Stats strip ── */}
-      <section className="relative z-10 border-y border-white/[0.06]">
+      <section className="relative z-10 border-y border-white/[0.06]" data-reveal>
         <div className="max-w-6xl mx-auto px-6 py-14 grid grid-cols-2 md:grid-cols-4 gap-6">
           {[
             { value: "4", label: "Free agents", icon: <BotIcon size={18} /> },
@@ -434,21 +453,21 @@ export default function Home() {
             { value: "0", label: "API keys required", icon: <KeyIcon size={18} /> },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
-              <div className="flex justify-center mb-3 text-violet-400">{stat.icon}</div>
+              <div className="flex justify-center mb-3 text-emerald-400">{stat.icon}</div>
               <div className="text-3xl font-semibold tracking-tight text-white mb-1">{stat.value}</div>
-              <div className="text-[13px] text-zinc-500">{stat.label}</div>
+              <div className="text-[13px] text-slate-500">{stat.label}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── CTA ── */}
-      <section className="relative z-10 max-w-3xl mx-auto px-6 py-24 text-center">
-        <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-b from-violet-500/[0.1] to-fuchsia-500/[0.04] p-10 sm:p-14 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
-          <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
+      <section className="relative z-10 max-w-3xl mx-auto px-6 py-24 text-center" data-reveal>
+        <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/[0.1] to-teal-500/[0.04] p-10 sm:p-14 backdrop-blur-xl shadow-2xl shadow-emerald-950/50">
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
             Ready to start building?
           </h2>
-          <p className="text-zinc-400 text-lg mb-8 max-w-lg mx-auto">
+          <p className="text-slate-400 text-lg mb-8 max-w-lg mx-auto">
             Create a free account for persistent sessions, or try it right now as a guest — no strings attached.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -461,16 +480,16 @@ export default function Home() {
             </Link>
             <button
               onClick={handleGuest}
-              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-zinc-300 hover:text-white flex items-center justify-center gap-2"
+              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-slate-300 hover:text-white flex items-center justify-center gap-2"
             >
               <GhostIcon size={16} />
               Continue as guest
             </button>
           </div>
-          <div className="flex items-center justify-center gap-6 mt-8 text-[12px] text-zinc-600">
-            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-zinc-400" />Free forever</div>
-            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-zinc-400" />No credit card</div>
-            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-zinc-400" />Open source</div>
+          <div className="flex items-center justify-center gap-6 mt-8 text-[12px] text-slate-600">
+            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-slate-400" />Free forever</div>
+            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-slate-400" />No credit card</div>
+            <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-slate-400" />Open source</div>
           </div>
         </div>
       </section>
@@ -480,10 +499,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-[14px] text-white">Founda</span>
-            <span className="text-[12px] text-zinc-600">CRM</span>
+            <span className="text-[12px] text-slate-600">CRM</span>
           </div>
 
-          <div className="flex items-center gap-6 text-[13px] text-zinc-500">
+          <div className="flex items-center gap-6 text-[13px] text-slate-500">
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#agents" className="hover:text-white transition-colors">Agents</a>
             <a href="#install" className="hover:text-white transition-colors">Install</a>
@@ -492,14 +511,14 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <a href="https://github.com/Brave290/Founda-crm" target="_blank" rel="noopener noreferrer"
-              className="text-zinc-600 hover:text-white transition-colors">
+              className="text-slate-600 hover:text-white transition-colors">
               <GithubIcon size={17} />
             </a>
-            <span className="text-[12px] text-zinc-600">Powered by opencode</span>
+            <span className="text-[12px] text-slate-600">Powered by opencode</span>
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-white/[0.06] text-center text-[12px] text-zinc-700">
+        <div className="mt-8 pt-6 border-t border-white/[0.06] text-center text-[12px] text-slate-700">
           com.hx.foundacrm — Next.js, Supabase, opencode, Capacitor
         </div>
       </footer>

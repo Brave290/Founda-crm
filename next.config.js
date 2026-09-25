@@ -16,6 +16,17 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    // Bundle the build-time opencode binary into the API functions
+    outputFileTracingIncludes: {
+      "/api/chat": [".opencode/bin/**"],
+      "/api/autonomous": [".opencode/bin/**"],
+      "/api/opencode/install": [".opencode/bin/**"],
+      "/api/opencode/agents": [".opencode/bin/**"],
+      "/api/opencode/mcp": [".opencode/bin/**"],
+      "/api/opencode/auth": [".opencode/bin/**"],
+    },
+  },
 };
 
 module.exports = nextConfig;

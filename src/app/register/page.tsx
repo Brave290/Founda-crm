@@ -42,12 +42,12 @@ export default function RegisterPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
         <div className="w-full max-w-sm relative z-10 text-center animate-scale-in">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-fuchsia-500/30">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-xl shadow-2xl shadow-emerald-950/50">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-teal-500/30">
               <MailIcon size={22} />
             </div>
-            <h1 className="text-xl font-semibold mb-2 text-white">Check your email</h1>
-            <p className="text-zinc-500 text-sm mb-6">
+            <h1 className="font-display text-xl font-semibold mb-2 text-white">Check your email</h1>
+            <p className="text-slate-500 text-sm mb-6">
               We sent a confirmation link to <strong className="text-white">{email}</strong>.
               Click it to activate your account.
             </p>
@@ -66,44 +66,44 @@ export default function RegisterPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
             <span className="font-semibold text-lg gradient-text tracking-tight">Founda</span>
-            <span className="text-sm text-zinc-600">CRM</span>
+            <span className="text-sm text-slate-600">CRM</span>
           </Link>
-          <h1 className="text-2xl font-semibold mb-1.5 text-white">Create account</h1>
-          <p className="text-zinc-500 text-sm">Persistent memory for your AI sessions</p>
+          <h1 className="font-display text-2xl font-semibold mb-1.5 text-white">Create account</h1>
+          <p className="text-slate-500 text-sm">Persistent memory for your AI sessions</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl shadow-2xl shadow-emerald-950/50">
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="animate-fade-up stagger-1">
-              <label className="block text-[13px] text-zinc-400 mb-1.5">Full name</label>
+              <label className="block text-[13px] text-slate-400 mb-1.5">Full name</label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-zinc-600 text-sm"
+                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-slate-600 text-sm"
                 placeholder="Your name"
               />
             </div>
             <div className="animate-fade-up stagger-2">
-              <label className="block text-[13px] text-zinc-400 mb-1.5">Email</label>
+              <label className="block text-[13px] text-slate-400 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-zinc-600 text-sm"
+                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-slate-600 text-sm"
                 placeholder="you@example.com"
               />
             </div>
             <div className="animate-fade-up stagger-3">
-              <label className="block text-[13px] text-zinc-400 mb-1.5">Password</label>
+              <label className="block text-[13px] text-slate-400 mb-1.5">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-zinc-600 text-sm"
+                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-slate-600 text-sm"
                 placeholder="Min 8 characters"
               />
             </div>
@@ -132,24 +132,24 @@ export default function RegisterPage() {
 
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-white/[0.08]" />
-            <span className="text-[11px] text-zinc-600">or</span>
+            <span className="text-[11px] text-slate-600">or</span>
             <div className="flex-1 h-px bg-white/[0.08]" />
           </div>
 
           <button onClick={handleGuest}
-            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/10 hover:bg-violet-500/[0.1] hover:border-violet-400/40 transition-all animate-fade-up stagger-5">
+            className="w-full py-2.5 rounded-xl text-sm text-slate-400 hover:text-white border border-white/10 hover:bg-emerald-500/[0.1] hover:border-emerald-400/40 transition-all animate-fade-up stagger-5">
             Try without account
           </button>
 
-          <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-zinc-600">
+          <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-slate-600">
             <span className="flex items-center gap-1 text-emerald-500/90"><CheckCircleIcon size={11} /> No email confirmation</span>
             <span className="flex items-center gap-1 text-emerald-500/90"><CheckCircleIcon size={11} /> Free forever</span>
           </div>
         </div>
 
-        <p className="text-center text-[13px] text-zinc-500 mt-5 animate-fade-up stagger-6">
+        <p className="text-center text-[13px] text-slate-500 mt-5 animate-fade-up stagger-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-violet-300 hover:text-violet-200 font-medium">
+          <Link href="/login" className="text-emerald-300 hover:text-emerald-200 font-medium">
             Sign in
           </Link>
         </p>

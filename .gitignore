@@ -11,3 +11,5 @@ out/
 android/
 ios/
 .env*
+.opencode/
+.opencode-runtime/

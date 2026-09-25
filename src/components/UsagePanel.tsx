@@ -2,8 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CheckCircleIcon, XCircleIcon, InfoIcon } from "@/components/icons";
+import {
+  getStore,
+  trackStoreUsage,
+  resetStoreUsage,
+  subscribe as subscribeStore,
+  ensureInit,
+} from "@/lib/store";
+import { isGuest } from "@/lib/auth";
 
-// ── Usage tracking (localStorage for guests, Supabase for logged in) ──
+// ── Usage tracking (server-backed via lib/store, synced across devices) ──
 
 const DAILY_LIMIT = 1_000_000; // messages per day (soft anti-abuse cap)
 const TOKEN_LIMIT = 5_000_000_000; // 5 billion tokens per day — effectively unlimited for normal use
@@ -25,43 +33,38 @@ function getResetTime(): number {
   return tomorrow.getTime();
 }
 
+let storeInitStarted = false;
+function initStoreIfNeeded() {
+  if (storeInitStarted || typeof window === "undefined") return;
+  storeInitStarted = true;
+  // hydrate from server (idempotent — useAuth usually wins the race)
+  if (isGuest()) ensureInit("guest");
+}
+
 export function loadUsage(): UsageState {
   if (typeof window === "undefined") {
     return { messagesUsed: 0, tokensUsed: 0, dailyLimit: DAILY_LIMIT, tokenLimit: TOKEN_LIMIT, resetAt: 0, conversations: 0 };
   }
-  try {
-    const raw = localStorage.getItem("founda_usage");
-    if (raw) {
-      const data = JSON.parse(raw);
-      // Reset if past reset time
-      if (Date.now() > data.resetAt) {
-        return { messagesUsed: 0, tokensUsed: 0, dailyLimit: DAILY_LIMIT, tokenLimit: TOKEN_LIMIT, resetAt: getResetTime(), conversations: data.conversations || 0 };
-      }
-      return { ...data, dailyLimit: DAILY_LIMIT, tokenLimit: TOKEN_LIMIT };
-    }
-  } catch {}
-  return { messagesUsed: 0, tokensUsed: 0, dailyLimit: DAILY_LIMIT, tokenLimit: TOKEN_LIMIT, resetAt: getResetTime(), conversations: 0 };
-}
-
-export function saveUsage(usage: UsageState) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("founda_usage", JSON.stringify(usage));
+  initStoreIfNeeded();
+  const u = getStore().usage;
+  return {
+    messagesUsed: u.messages,
+    tokensUsed: u.tokens,
+    dailyLimit: DAILY_LIMIT,
+    tokenLimit: TOKEN_LIMIT,
+    resetAt: getResetTime(),
+    conversations: u.conversations,
+  };
 }
 
 export function trackUsage(messages: number = 1, tokens: number = 0): UsageState {
-  const usage = loadUsage();
-  usage.messagesUsed += messages;
-  usage.tokensUsed += tokens;
-  if (messages > 0) usage.conversations = usage.conversations;
-  saveUsage(usage);
-  return usage;
+  initStoreIfNeeded();
+  trackStoreUsage(messages, tokens);
+  return loadUsage();
 }
 
 export function resetUsage() {
-  const usage = loadUsage();
-  const fresh = { messagesUsed: 0, tokensUsed: 0, dailyLimit: DAILY_LIMIT, tokenLimit: TOKEN_LIMIT, resetAt: getResetTime(), conversations: usage.conversations };
-  saveUsage(fresh);
-  return fresh;
+  resetStoreUsage();
 }
 
 export function canSend(): boolean {
@@ -104,8 +107,12 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     setUsage(loadUsage());
+    const unsub = subscribeStore(() => setUsage(loadUsage()));
     const interval = setInterval(() => setUsage(loadUsage()), 5000);
-    return () => clearInterval(interval);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
   }, []);
 
   if (!usage) return null;
@@ -117,16 +124,16 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.08] px-3 py-1.5 flex items-center gap-2.5 text-xs backdrop-blur-md">
+      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3 py-1.5 flex items-center gap-2.5 text-xs backdrop-blur-md">
         <div className="flex items-center gap-1.5">
           <div className={`h-1.5 w-1.5 rounded-full ${isCritical ? "bg-red-400" : isLow ? "bg-amber-400" : "bg-emerald-400"}`} />
-          <span className="text-zinc-400 font-mono">{usage.messagesUsed}/{usage.dailyLimit}</span>
+          <span className="text-slate-400 font-mono">{usage.messagesUsed}/{usage.dailyLimit}</span>
         </div>
         <div className="h-1 w-14 bg-white/10 rounded-full overflow-hidden hidden sm:block">
-          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
+          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-emerald-500 to-teal-500"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
-        <span className="text-zinc-600 font-mono text-[11px]">
+        <span className="text-slate-600 font-mono text-[11px]">
           {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
         </span>
       </div>
@@ -134,10 +141,10 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 animate-fade-up shadow-xl shadow-violet-950/40">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 animate-fade-up shadow-xl shadow-emerald-950/40">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-sm gradient-text">Usage</h3>
-        <div className="text-[11px] text-violet-300 font-mono bg-violet-500/10 border border-violet-500/25 px-2 py-1 rounded-md">
+        <div className="text-[11px] text-emerald-300 font-mono bg-emerald-500/10 border border-emerald-500/25 px-2 py-1 rounded-md">
           resets {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
         </div>
       </div>
@@ -145,13 +152,13 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
       {/* Messages */}
       <div className="mb-4">
         <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-zinc-500">Messages today</span>
-          <span className={`font-mono ${isCritical ? "text-red-400" : isLow ? "text-amber-400" : "text-zinc-300"}`}>
+          <span className="text-slate-500">Messages today</span>
+          <span className={`font-mono ${isCritical ? "text-red-400" : isLow ? "text-amber-400" : "text-slate-300"}`}>
             {usage.messagesUsed} / {usage.dailyLimit}
           </span>
         </div>
         <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
+          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-emerald-500 to-teal-500"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
       </div>
@@ -159,8 +166,8 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
       {/* Tokens */}
       <div className="mb-4">
         <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-zinc-500">Tokens today</span>
-          <span className="font-mono text-zinc-300">
+          <span className="text-slate-500">Tokens today</span>
+          <span className="font-mono text-slate-300">
             {formatTokens(usage.tokensUsed)} / {formatTokens(usage.tokenLimit)}
           </span>
         </div>
@@ -172,17 +179,17 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.07] p-2">
-          <div className="text-lg font-semibold text-violet-300">{usage.messagesUsed}</div>
-          <div className="text-[10px] text-zinc-500">Sent</div>
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] p-2">
+          <div className="text-lg font-semibold text-emerald-300">{usage.messagesUsed}</div>
+          <div className="text-[10px] text-slate-500">Sent</div>
         </div>
-        <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.07] p-2">
-          <div className="text-lg font-semibold text-fuchsia-300">{usage.dailyLimit - usage.messagesUsed}</div>
-          <div className="text-[10px] text-zinc-500">Left</div>
+        <div className="rounded-lg border border-teal-500/20 bg-teal-500/[0.07] p-2">
+          <div className="text-lg font-semibold text-amber-300">{usage.dailyLimit - usage.messagesUsed}</div>
+          <div className="text-[10px] text-slate-500">Left</div>
         </div>
         <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.07] p-2">
           <div className="text-lg font-semibold text-sky-300">{usage.conversations}</div>
-          <div className="text-[10px] text-zinc-500">Chats</div>
+          <div className="text-[10px] text-slate-500">Chats</div>
         </div>
       </div>
 
@@ -209,15 +216,15 @@ export function useToast() {
   const Toaster = () => (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast-in rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl border bg-[#121022]/95 backdrop-blur-xl ${
+        <div key={t.id} className={`toast-in rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl border bg-[#101a30]/95 backdrop-blur-xl ${
           t.type === "success" ? "border-emerald-500/25" : t.type === "error" ? "border-red-500/25" : "border-white/10"
         }`}>
           <span className={
-            t.type === "success" ? "text-emerald-400" : t.type === "error" ? "text-red-400" : "text-zinc-400"
+            t.type === "success" ? "text-emerald-400" : t.type === "error" ? "text-red-400" : "text-slate-400"
           }>
             {t.type === "success" ? <CheckCircleIcon size={16} /> : t.type === "error" ? <XCircleIcon size={16} /> : <InfoIcon size={16} />}
           </span>
-          <span className="text-zinc-200">{t.message}</span>
+          <span className="text-slate-200">{t.message}</span>
         </div>
       ))}
     </div>

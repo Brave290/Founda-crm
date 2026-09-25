@@ -1,6 +1,7 @@
 import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk/v2";
 import { execSync, spawn } from "child_process";
 import fs from "fs";
+import os from "os";
 import path from "path";
 
 let client: OpencodeClient | null = null;
@@ -8,50 +9,93 @@ let serverUrl: string | null = null;
 let serverClose: (() => void) | null = null;
 
 const OPENCODE_DIR = path.join(process.cwd(), ".opencode-runtime");
-const OPENCODE_BIN = path.join(OPENCODE_DIR, "bin", "opencode");
+const BUNDLED_BIN = path.join(process.cwd(), ".opencode", "bin", "opencode");
+const RUNTIME_BIN = path.join(OPENCODE_DIR, "bin", "opencode");
 const INSTALL_DIR = process.env.OPENCODE_HOME || OPENCODE_DIR;
 
-// --- Install / Auto-Update ---
+// --- Runtime environment (Vercel has no HOME; bundled binary lives in cwd) ---
+
+function ensureRuntimeEnv() {
+  if (!process.env.HOME || process.env.HOME === "undefined") {
+    process.env.HOME = path.join(os.tmpdir(), "opencode-home");
+  }
+  if (!process.env.SHELL) process.env.SHELL = "/bin/bash";
+  try {
+    fs.mkdirSync(process.env.HOME, { recursive: true });
+    fs.mkdirSync(path.join(process.env.HOME, ".opencode", "bin"), { recursive: true });
+  } catch {}
+  const bin = getOpencodePath();
+  const dir = bin ? path.dirname(bin) : path.dirname(BUNDLED_BIN);
+  const pathParts = (process.env.PATH || "").split(":");
+  if (!pathParts.includes(dir)) process.env.PATH = `${dir}:${process.env.PATH || ""}`;
+}
+ensureRuntimeEnv();
+
+// --- Binary resolution (bundled at build time > runtime install > system) ---
+
+function binaryCandidates(): string[] {
+  const home = process.env.HOME && process.env.HOME !== "undefined" ? process.env.HOME : os.homedir();
+  return [...new Set([
+    BUNDLED_BIN,
+    RUNTIME_BIN,
+    path.join(home, ".opencode", "bin", "opencode"),
+    path.join(os.homedir(), ".opencode", "bin", "opencode"),
+  ])];
+}
+
+function getOpencodePath(): string | null {
+  for (const c of binaryCandidates()) {
+    try {
+      if (fs.existsSync(c)) {
+        try { fs.chmodSync(c, 0o755); } catch {}
+        return c;
+      }
+    } catch {}
+  }
+  try {
+    const p = execSync("command -v opencode", {
+      encoding: "utf-8",
+      stdio: "pipe",
+      env: process.env,
+    }).trim();
+    if (p && fs.existsSync(p)) return p;
+  } catch {}
+  return null;
+}
 
 export function isInstalled(): boolean {
-  try {
-    if (fs.existsSync(OPENCODE_BIN)) return true;
-    // Also check system-installed opencode
-    execSync("which opencode", { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
-  }
+  return getOpencodePath() !== null;
 }
 
 export function getOpencodeVersion(): string | null {
   try {
     const bin = getOpencodePath();
     if (!bin) return null;
-    const out = execSync(`"${bin}" --version`, { encoding: "utf-8", stdio: "pipe" });
+    const out = execSync(`"${bin}" --version`, {
+      encoding: "utf-8",
+      stdio: "pipe",
+      env: process.env,
+      timeout: 15_000,
+    });
     return out.trim();
   } catch {
     return null;
   }
 }
 
-function getOpencodePath(): string | null {
-  if (fs.existsSync(OPENCODE_BIN)) return OPENCODE_BIN;
-  try {
-    const p = execSync("which opencode", { encoding: "utf-8", stdio: "pipe" }).trim();
-    if (p) return p;
-  } catch {}
-  return null;
-}
-
 export async function installOpencode(): Promise<{ success: boolean; message: string }> {
   try {
-    // Official opencode install script
-    execSync(
-      `curl -fsSL https://opencode.ai/install | bash`,
-      { stdio: "pipe", timeout: 120_000, shell: "/bin/bash" }
-    );
-    return { success: true, message: "opencode installed successfully" };
+    ensureRuntimeEnv();
+    // Official opencode install script — HOME/SHELL are guaranteed set above
+    execSync(`curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path`, {
+      stdio: "pipe",
+      timeout: 120_000,
+      shell: "/bin/bash",
+      env: process.env,
+    });
+    ensureRuntimeEnv();
+    if (isInstalled()) return { success: true, message: "opencode installed successfully" };
+    return { success: false, message: "Install script ran but binary was not found" };
   } catch (e: any) {
     return { success: false, message: `Install failed: ${e.message}` };
   }
@@ -59,10 +103,13 @@ export async function installOpencode(): Promise<{ success: boolean; message: st
 
 export async function upgradeOpencode(): Promise<{ success: boolean; message: string }> {
   try {
-    execSync(
-      `curl -fsSL https://opencode.ai/install | bash -s -- latest`,
-      { stdio: "pipe", timeout: 120_000, shell: "/bin/bash" }
-    );
+    ensureRuntimeEnv();
+    execSync(`curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path latest`, {
+      stdio: "pipe",
+      timeout: 120_000,
+      shell: "/bin/bash",
+      env: process.env,
+    });
     return { success: true, message: "opencode upgraded to latest version" };
   } catch (e: any) {
     return { success: false, message: `Upgrade failed: ${e.message}` };
@@ -72,6 +119,8 @@ export async function upgradeOpencode(): Promise<{ success: boolean; message: st
 // --- Server Lifecycle ---
 
 export async function ensureServer(): Promise<OpencodeClient> {
+  ensureRuntimeEnv();
+
   if (client) {
     try {
       await client.global.health();
@@ -87,7 +136,7 @@ export async function ensureServer(): Promise<OpencodeClient> {
     const result = await installOpencode();
     if (!result.success) {
       throw new Error(
-        "opencode is not installed and auto-install failed. Run: curl -fsSL https://opencode.ai/install | bash"
+        "opencode engine unavailable (binary missing and auto-install failed)"
       );
     }
   }

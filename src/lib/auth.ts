@@ -2,19 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import {
+  ensureInit,
+  loadStoreSessions,
+  saveStoreSession,
+  deleteStoreSession,
+  claimGuestToAccount,
+  type GuestSession,
+} from "@/lib/store";
 
-// ── Guest mode: use app without account, no memory stored ──
+// ── Guest mode: use app without account (data stored server-side per device) ──
 
 const GUEST_KEY = "founda_guest";
-const GUEST_SESSIONS_KEY = "founda_guest_sessions";
 
-export interface GuestSession {
-  id: string;
-  title: string;
-  agent: string;
-  messages: any[];
-  createdAt: string;
-}
+export type { GuestSession };
 
 export function isGuest(): boolean {
   if (typeof window === "undefined") return false;
@@ -29,27 +30,17 @@ export function exitGuestMode() {
   localStorage.removeItem(GUEST_KEY);
 }
 
-// Guest sessions (localStorage only, cleared when account created)
+// Guest sessions (server-backed cache — same API as before, now persists)
 export function loadGuestSessions(): GuestSession[] {
-  try {
-    return JSON.parse(localStorage.getItem(GUEST_SESSIONS_KEY) || "[]");
-  } catch {
-    return [];
-  }
+  return loadStoreSessions();
 }
 
 export function saveGuestSession(session: GuestSession) {
-  const sessions = loadGuestSessions();
-  const idx = sessions.findIndex((s) => s.id === session.id);
-  if (idx >= 0) sessions[idx] = session;
-  else sessions.unshift(session);
-  // Keep only last 20 guest sessions
-  localStorage.setItem(GUEST_SESSIONS_KEY, JSON.stringify(sessions.slice(0, 20)));
+  saveStoreSession(session);
 }
 
 export function deleteGuestSession(id: string) {
-  const sessions = loadGuestSessions().filter((s) => s.id !== id);
-  localStorage.setItem(GUEST_SESSIONS_KEY, JSON.stringify(sessions));
+  deleteStoreSession(id);
 }
 
 // ── Auth hook ──
@@ -60,6 +51,7 @@ export function useAuth() {
 
   useEffect(() => {
     let active = true;
+    let wasGuest = isGuest();
 
     const finish = (u: any) => {
       if (!active) return;
@@ -67,8 +59,12 @@ export function useAuth() {
       if (u) {
         setGuest(false);
         exitGuestMode();
+        ensureInit("account", u.id);
+        if (wasGuest) claimGuestToAccount(u.id);
       } else {
-        setGuest(isGuest());
+        const g = isGuest();
+        setGuest(g);
+        if (g) ensureInit("guest");
       }
       setLoading(false);
     };
@@ -126,6 +122,8 @@ export function useAuth() {
       exitGuestMode();
       setGuest(false);
       setUser(data.user);
+      ensureInit("account", data.user?.id);
+      claimGuestToAccount(data.user?.id || "");
     }
     return { needsConfirm: !data.session };
   };
@@ -142,6 +140,7 @@ export function useAuth() {
     setGuest(true);
     setUser(null);
     setLoading(false);
+    ensureInit("guest");
   }, []);
 
   return { user, guest, loading, login, register, logout, continueAsGuest };

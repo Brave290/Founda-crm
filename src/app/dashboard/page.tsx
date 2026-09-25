@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth, loadGuestSessions, saveGuestSession, deleteGuestSession, GuestSession } from "@/lib/auth";
 import { UsagePanel, useToast, trackUsage, canSend } from "@/components/UsagePanel";
+import { ready as storeReady, subscribe as storeSubscribe } from "@/lib/store";
 import {
   ChatIcon, BotIcon, ZapIcon, PlugIcon, SettingsIcon, GhostIcon,
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, GithubIcon,
@@ -37,10 +38,16 @@ export default function DashboardPage() {
     if (mounted && !loading && !user && !guest) {
       continueAsGuest();
     }
-    if (mounted && !loading) {
-      setGuestSessions(loadGuestSessions());
-      fetch("/api/opencode/install").then(r => r.json()).then(setOcStatus).catch(() => {});
-    }
+    if (!mounted || loading) return;
+    let unsub: (() => void) | undefined;
+    storeReady()
+      .then(() => {
+        setGuestSessions(loadGuestSessions());
+        unsub = storeSubscribe(() => setGuestSessions(loadGuestSessions()));
+      })
+      .catch(() => setGuestSessions(loadGuestSessions()));
+    fetch("/api/opencode/install").then(r => r.json()).then(setOcStatus).catch(() => {});
+    return () => { unsub?.(); };
   }, [mounted, loading, user, guest]);
 
   if (!mounted || loading) {
@@ -48,7 +55,7 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="flex flex-col items-center gap-3 z-10">
           <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          <div className="text-zinc-500 text-sm">Loading…</div>
+          <div className="text-slate-500 text-sm">Loading…</div>
         </div>
       </div>
     );
@@ -114,7 +121,7 @@ export default function DashboardPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
             <span className="font-semibold tracking-tight text-[15px] gradient-text">Founda</span>
-            <span className="text-[13px] text-zinc-600 hidden sm:inline">CRM</span>
+            <span className="text-[13px] text-slate-600 hidden sm:inline">CRM</span>
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -122,9 +129,9 @@ export default function DashboardPage() {
             <div className={`hidden sm:flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border ${
               ocStatus?.installed
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : "bg-white/5 text-zinc-400 border-white/10"
+                : "bg-white/5 text-slate-400 border-white/10"
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${ocStatus?.installed ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${ocStatus?.installed ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
               opencode {ocStatus?.installed ? "online" : "offline"}
             </div>
 
@@ -134,11 +141,11 @@ export default function DashboardPage() {
             {/* User */}
             {user ? (
               <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[11px] font-semibold text-white shadow-md shadow-violet-600/30">
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-[11px] font-semibold text-white shadow-md shadow-emerald-600/30">
                   {user.email?.[0]?.toUpperCase() || "?"}
                 </div>
                 <button onClick={() => { logout(); router.push("/"); }}
-                  className="glass-btn px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white hidden sm:flex items-center gap-1.5">
+                  className="glass-btn px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hidden sm:flex items-center gap-1.5">
                   <LogOutIcon size={13} />
                   Sign out
                 </button>
@@ -154,10 +161,10 @@ export default function DashboardPage() {
 
       {/* Guest banner */}
       {guest && !user && (
-        <div className="relative z-10 bg-gradient-to-r from-violet-500/[0.08] to-fuchsia-500/[0.05] border-b border-violet-500/15 px-4 py-2.5 flex items-center justify-center gap-3 text-sm animate-fade-in">
-          <GhostIcon size={14} className="text-zinc-400" />
-          <span className="text-zinc-400">Guest mode — chats are not saved permanently.</span>
-          <Link href="/register" className="text-violet-300 hover:text-violet-200 font-medium underline underline-offset-2 text-[13px]">
+        <div className="relative z-10 bg-gradient-to-r from-emerald-500/[0.08] to-teal-500/[0.05] border-b border-emerald-500/15 px-4 py-2.5 flex items-center justify-center gap-3 text-sm animate-fade-in">
+          <GhostIcon size={14} className="text-slate-400" />
+          <span className="text-slate-300">Guest mode — chats &amp; settings are saved server-side on this device. Create an account to sync across phones.</span>
+          <Link href="/register" className="text-emerald-300 hover:text-emerald-200 font-medium underline underline-offset-2 text-[13px]">
             Create account to save
           </Link>
         </div>
@@ -170,8 +177,8 @@ export default function DashboardPage() {
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium rounded-t-lg transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "text-white bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 border-b-2 border-violet-400 -mb-px shadow-[0_4px_16px_rgba(139,92,246,0.18)]"
-                  : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
+                  ? "text-white bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border-b-2 border-emerald-400 -mb-px shadow-[0_4px_16px_rgba(139,92,246,0.18)]"
+                  : "text-slate-500 hover:text-slate-200 hover:bg-white/[0.04]"
               }`}>
               {tab.icon}
               {tab.label}
@@ -209,12 +216,47 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
   const router = useRouter();
   const [importData, setImportData] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [accountSessions, setAccountSessions] = useState<any[]>([]);
+  const [loadingAcct, setLoadingAcct] = useState(false);
+
+  const loadAccountSessions = async () => {
+    if (!user) return;
+    setLoadingAcct(true);
+    try {
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      const sb = createSupabaseBrowserClient();
+      const { data } = await sb
+        .from("sessions")
+        .select("id, title, agent_name, message_count, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+      setAccountSessions(data || []);
+    } catch {}
+    setLoadingAcct(false);
+  };
+
+  useEffect(() => {
+    if (user) loadAccountSessions();
+  }, [user]);
 
   const deleteGuestChat = (id: string) => {
     if (!confirm("Delete this chat?")) return;
     deleteGuestSession(id);
     setGuestSessions(loadGuestSessions());
     toast("Chat deleted", "success");
+  };
+
+  const deleteAccountChat = async (id: string) => {
+    if (!confirm("Delete this chat?")) return;
+    try {
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      const sb = createSupabaseBrowserClient();
+      await sb.from("sessions").delete().eq("id", id).eq("user_id", user.id);
+      loadAccountSessions();
+      toast("Chat deleted", "success");
+    } catch {
+      toast("Could not delete chat", "error");
+    }
   };
 
   const importSession = () => {
@@ -238,20 +280,28 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
     }
   };
 
+  const sessions = user ? null : guestSessions;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-white">Chats</h2>
-          <p className="text-[13px] text-zinc-500 mt-0.5">
-            {user ? "Saved to your account" : guest ? "Local only — not saved permanently" : ""}
+          <p className="text-[13px] text-slate-500 mt-0.5">
+            {user
+              ? "Stored server-side in your account — syncs across all devices"
+              : guest
+                ? "Stored server-side on this device profile — create an account to sync everywhere"
+                : ""}
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowImport(!showImport)}
-            className="glass-btn px-3.5 py-2 rounded-lg text-[13px] text-zinc-300 hover:text-white">
-            Import
-          </button>
+          {!user && (
+            <button onClick={() => setShowImport(!showImport)}
+              className="glass-btn px-3.5 py-2 rounded-lg text-[13px] text-slate-300 hover:text-white">
+              Import
+            </button>
+          )}
           <button onClick={onNewChat} className="glass-btn-primary px-4 py-2 rounded-lg text-[13px] flex items-center gap-1.5">
             <PlusIcon size={14} />
             New chat
@@ -264,7 +314,7 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
           <h3 className="text-[13px] font-medium text-white mb-2">Import session JSON</h3>
           <textarea value={importData} onChange={(e) => setImportData(e.target.value)}
             placeholder='{"title": "...", "state": {"messages": [...]}}' rows={4}
-            className="glass-input w-full px-4 py-3 rounded-xl text-xs font-mono text-white placeholder-zinc-600 resize-none" />
+            className="glass-input w-full px-4 py-3 rounded-xl text-xs font-mono text-white placeholder-slate-600 resize-none" />
           <button onClick={importSession} disabled={!importData}
             className="mt-2 glass-btn-primary px-4 py-2 rounded-lg text-xs disabled:opacity-40">
             Import
@@ -273,32 +323,71 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
       )}
 
       <div className="space-y-2">
-        {guestSessions.length === 0 && (
-          <div className="text-center py-16 glass-card">
-            <ChatIcon size={28} className="mx-auto mb-3 text-violet-400" />
-            <p className="text-zinc-400 mb-1 text-sm">No chats yet.</p>
-            <p className="text-[13px] text-zinc-500">Start a new chat to begin.</p>
-          </div>
+        {user ? (
+          <>
+            {loadingAcct && accountSessions.length === 0 && (
+              <div className="text-center py-16 glass-card">
+                <div className="h-5 w-5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-[13px] text-slate-500">Loading your chats…</p>
+              </div>
+            )}
+            {!loadingAcct && accountSessions.length === 0 && (
+              <div className="text-center py-16 glass-card">
+                <ChatIcon size={28} className="mx-auto mb-3 text-emerald-400" />
+                <p className="text-slate-400 mb-1 text-sm">No chats yet.</p>
+                <p className="text-[13px] text-slate-500">Start a new chat to begin.</p>
+              </div>
+            )}
+            {accountSessions.map((s: any, i: number) => (
+              <div key={s.id}
+                className={`glass-card p-4 flex items-center justify-between group animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
+                <button onClick={() => router.push(`/sessions/${s.id}`)} className="flex-1 text-left min-w-0">
+                  <div className="font-medium text-white truncate group-hover:text-slate-300 transition-colors text-sm">
+                    {s.title || "Untitled chat"}
+                  </div>
+                  <div className="text-[12px] text-slate-500 mt-0.5">
+                    {s.agent_name} · {s.message_count || 0} messages · {new Date(s.updated_at).toLocaleDateString()}
+                  </div>
+                </button>
+                <div className="flex gap-1.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => deleteAccountChat(s.id)}
+                    className="glass-btn-danger px-3 py-1.5 rounded-lg text-xs">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            {sessions!.length === 0 && (
+              <div className="text-center py-16 glass-card">
+                <ChatIcon size={28} className="mx-auto mb-3 text-emerald-400" />
+                <p className="text-slate-400 mb-1 text-sm">No chats yet.</p>
+                <p className="text-[13px] text-slate-500">Start a new chat to begin.</p>
+              </div>
+            )}
+            {sessions!.map((session: GuestSession, i: number) => (
+              <div key={session.id}
+                className={`glass-card p-4 flex items-center justify-between group animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
+                <button onClick={() => router.push(`/sessions/${session.id}?guest=1`)} className="flex-1 text-left min-w-0">
+                  <div className="font-medium text-white truncate group-hover:text-slate-300 transition-colors text-sm">
+                    {session.title}
+                  </div>
+                  <div className="text-[12px] text-slate-500 mt-0.5">
+                    {session.agent} · {session.messages.length} messages · {new Date(session.createdAt).toLocaleDateString()}
+                  </div>
+                </button>
+                <div className="flex gap-1.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => deleteGuestChat(session.id)}
+                    className="glass-btn-danger px-3 py-1.5 rounded-lg text-xs">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
         )}
-        {guestSessions.map((session: GuestSession, i: number) => (
-          <div key={session.id}
-            className={`glass-card p-4 flex items-center justify-between group animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
-            <button onClick={() => router.push(`/sessions/${session.id}?guest=1`)} className="flex-1 text-left min-w-0">
-              <div className="font-medium text-white truncate group-hover:text-zinc-300 transition-colors text-sm">
-                {session.title}
-              </div>
-              <div className="text-[12px] text-zinc-500 mt-0.5">
-                {session.agent} · {session.messages.length} messages · {new Date(session.createdAt).toLocaleDateString()}
-              </div>
-            </button>
-            <div className="flex gap-1.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => deleteGuestChat(session.id)}
-                className="glass-btn-danger px-3 py-1.5 rounded-lg text-xs">
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -313,7 +402,7 @@ function AgentsTab() {
     { id: "build", name: "Build", icon: <WrenchIcon size={20} />, desc: "Writes, edits, and builds code", grad: "from-emerald-500 to-teal-600" },
     { id: "plan", name: "Plan", icon: <ClipboardIcon size={20} />, desc: "Read-only analysis and planning", grad: "from-amber-500 to-orange-600" },
     { id: "general", name: "General", icon: <MessageIcon size={20} />, desc: "General-purpose assistant", grad: "from-sky-500 to-blue-600" },
-    { id: "explore", name: "Explore", icon: <SearchIcon size={20} />, desc: "Codebase search and discovery", grad: "from-fuchsia-500 to-pink-600" },
+    { id: "explore", name: "Explore", icon: <SearchIcon size={20} />, desc: "Codebase search and discovery", grad: "from-violet-500 to-indigo-600" },
   ];
 
   useEffect(() => {
@@ -327,16 +416,16 @@ function AgentsTab() {
     build: "from-emerald-500 to-teal-600",
     plan: "from-amber-500 to-orange-600",
     general: "from-sky-500 to-blue-600",
-    explore: "from-fuchsia-500 to-pink-600",
+    explore: "from-violet-500 to-indigo-600",
   };
   const displayAgents = agents.length > 0
-    ? agents.map((a: any) => ({ ...a, icon: <BotIcon size={20} />, grad: AGENT_GRADS[a.id] || "from-violet-500 to-fuchsia-500" }))
+    ? agents.map((a: any) => ({ ...a, icon: <BotIcon size={20} />, grad: AGENT_GRADS[a.id] || "from-emerald-500 to-teal-500" }))
     : FALLBACK_AGENTS;
 
   return (
     <div>
       <h2 className="text-lg font-semibold text-white mb-1">Agents</h2>
-      <p className="text-[13px] text-zinc-500 mb-5">Free opencode agents — no API keys needed</p>
+      <p className="text-[13px] text-slate-500 mb-5">Free opencode agents — no API keys needed</p>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {displayAgents.map((agent: any, i: number) => (
@@ -350,8 +439,8 @@ function AgentsTab() {
               </span>
             </div>
             <h3 className="font-medium text-white mb-1 text-sm">{agent.name}</h3>
-            <p className="text-[12px] text-zinc-500 leading-relaxed">{agent.desc || agent.description}</p>
-            <code className="text-[10px] text-zinc-600 mt-2 block font-mono">{agent.id}</code>
+            <p className="text-[12px] text-slate-500 leading-relaxed">{agent.desc || agent.description}</p>
+            <code className="text-[10px] text-slate-600 mt-2 block font-mono">{agent.id}</code>
           </div>
         ))}
       </div>
@@ -393,7 +482,7 @@ function McpTab() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-white">MCP servers</h2>
-          <p className="text-[13px] text-zinc-500 mt-0.5">Tools your agents can use</p>
+          <p className="text-[13px] text-slate-500 mt-0.5">Tools your agents can use</p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)} className="glass-btn-primary px-4 py-2 rounded-lg text-[13px] flex items-center gap-1.5">
           {showAdd ? "Cancel" : <><PlusIcon size={13} /> Add</>}
@@ -403,10 +492,10 @@ function McpTab() {
       {showAdd && (
         <form onSubmit={addServer} className="glass-card p-5 mb-5 space-y-3 animate-fade-up">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Server name" required
-            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-zinc-600" />
+            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600" />
           <input value={command} onChange={(e) => setCommand(e.target.value)}
             placeholder="Command (e.g. npx -y @modelcontextprotocol/server-github)" required
-            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white font-mono placeholder-zinc-600" />
+            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white font-mono placeholder-slate-600" />
           <button type="submit" className="glass-btn-primary px-4 py-2 rounded-lg text-sm">Add server</button>
         </form>
       )}
@@ -420,11 +509,11 @@ function McpTab() {
         ].map((p) => (
           <button key={p.name} onClick={() => { setName(p.name); setCommand(p.cmd); setShowAdd(true); }}
             className="glass-card p-4 text-left !transform-none hover:bg-white/[0.04]">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500/70 to-fuchsia-500/70 border border-white/10 flex items-center justify-center text-white mb-2.5 shadow-md">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500/70 to-teal-500/70 border border-white/10 flex items-center justify-center text-white mb-2.5 shadow-md">
               {p.icon}
             </div>
             <div className="text-[13px] font-medium text-white">{p.name}</div>
-            <div className="text-[10px] text-zinc-500 font-mono truncate mt-0.5">{p.cmd}</div>
+            <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">{p.cmd}</div>
           </button>
         ))}
       </div>
@@ -434,14 +523,14 @@ function McpTab() {
           <div key={i} className="glass-card p-4 flex items-center justify-between animate-fade-up">
             <div>
               <div className="font-medium text-white text-sm">{s.name || s.id}</div>
-              <div className="text-xs text-zinc-500">{s.type || "local"}</div>
+              <div className="text-xs text-slate-500">{s.type || "local"}</div>
             </div>
             <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
               <CheckIcon size={10} /> Active
             </span>
           </div>
         ))}
-        {servers.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">No MCP servers connected.</p>}
+        {servers.length === 0 && <p className="text-slate-600 text-sm text-center py-8">No MCP servers connected.</p>}
       </div>
     </div>
   );
@@ -450,28 +539,60 @@ function McpTab() {
 // ── Settings Tab ──
 function SettingsTab({ user, guest, onLogout }: any) {
   const [displayName, setDisplayName] = useState("");
-  const [opencodeInfo, setOpencodeInfo] = useState<any>(null);
-  const [installing, setInstalling] = useState(false);
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({});
   const { toast, Toaster } = useToast();
 
   useEffect(() => {
     if (user) setDisplayName(user.user_metadata?.full_name || "");
-    fetch("/api/opencode/install").then(r => r.json()).then(setOpencodeInfo).catch(() => {});
+    let unsub: (() => void) | undefined;
+    import("@/lib/store")
+      .then(async (store) => {
+        await store.ready();
+        setApiKeys({ ...store.getApiKeys() });
+        unsub = store.subscribe(() => setApiKeys({ ...store.getApiKeys() }));
+      })
+      .catch(() => {});
+    return () => unsub?.();
   }, [user]);
 
-  const handleInstall = async (action: string) => {
-    setInstalling(true);
+  const saveKey = async (provider: string) => {
+    setSavingKeys((s) => ({ ...s, [provider]: true }));
     try {
-      const res = await fetch("/api/opencode/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      toast(data.message || "Done", data.success ? "success" : "error");
-      fetch("/api/opencode/install").then(r => r.json()).then(setOpencodeInfo).catch(() => {});
-    } catch { toast("Failed", "error"); }
-    finally { setInstalling(false); }
+      const store = await import("@/lib/store");
+      store.saveApiKey(provider, apiKeys[provider] || "");
+      await store.ready();
+      toast(user ? "Key saved to your account" : "Key saved to this device profile", "success");
+    } catch {
+      toast("Could not save key", "error");
+    }
+    setSavingKeys((s) => ({ ...s, [provider]: false }));
+  };
+
+  const saveProfile = async () => {
+    if (!user) return;
+    try {
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      const sb = createSupabaseBrowserClient();
+      const { error } = await sb
+        .from("profiles")
+        .upsert({ id: user.id, display_name: displayName, updated_at: new Date().toISOString() });
+      toast(error ? error.message : "Profile saved to your account", error ? "error" : "success");
+    } catch {
+      toast("Could not save profile", "error");
+    }
+  };
+
+  const clearGuestData = async () => {
+    if (!confirm("Delete all your saved chats and settings from the server?")) return;
+    try {
+      const store = await import("@/lib/store");
+      store.clearAllStoreData();
+      setGuestSessions([]);
+      toast("Server data cleared", "success");
+    } catch {
+      toast("Could not clear data", "error");
+    }
   };
 
   return (
@@ -481,22 +602,22 @@ function SettingsTab({ user, guest, onLogout }: any) {
       {/* Account */}
       <div className="glass-card p-6 !transform-none animate-fade-up">
         <h3 className="font-medium text-white mb-4 flex items-center gap-2 text-sm">
-          <UserIcon size={15} className="text-violet-400" /> Account
+          <UserIcon size={15} className="text-emerald-400" /> Account
         </h3>
         {user ? (
           <div className="space-y-3">
             <div>
-              <label className="text-[12px] text-zinc-500">Email</label>
+              <label className="text-[12px] text-slate-500">Email</label>
               <input value={user.email} disabled
                 className="glass-input w-full px-3 py-2 rounded-lg text-sm opacity-50 text-white mt-1" />
             </div>
             <div>
-              <label className="text-[12px] text-zinc-500">Display name</label>
+              <label className="text-[12px] text-slate-500">Display name</label>
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
-                className="glass-input w-full px-3 py-2 rounded-lg text-sm text-white mt-1 placeholder-zinc-600" />
+                className="glass-input w-full px-3 py-2 rounded-lg text-sm text-white mt-1 placeholder-slate-600" />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => toast("Settings saved", "success")}
+              <button onClick={saveProfile}
                 className="glass-btn-primary px-4 py-2 rounded-lg text-sm">Save</button>
               <button onClick={onLogout}
                 className="glass-btn-danger px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
@@ -506,7 +627,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
           </div>
         ) : (
           <div className="text-center py-4">
-            <p className="text-zinc-400 text-sm mb-3">You&apos;re in guest mode.</p>
+            <p className="text-slate-400 text-sm mb-3">You&apos;re in guest mode.</p>
             <Link href="/register" className="glass-btn-primary inline-block px-5 py-2.5 rounded-lg text-sm">
               Create account
             </Link>
@@ -514,44 +635,14 @@ function SettingsTab({ user, guest, onLogout }: any) {
         )}
       </div>
 
-      {/* opencode engine */}
-      <div className="glass-card p-6 !transform-none animate-fade-up stagger-2">
-        <h3 className="font-medium text-white mb-4 flex items-center gap-2 text-sm">
-          <ZapIcon size={15} className="text-sky-400" /> opencode engine
-        </h3>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${opencodeInfo?.installed ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} />
-            <span className="text-sm text-zinc-300">
-              {opencodeInfo?.installed ? `v${opencodeInfo.version || "installed"}` : "Not installed"}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            {!opencodeInfo?.installed && (
-              <button onClick={() => handleInstall("install")} disabled={installing}
-                className="glass-btn-primary px-4 py-1.5 rounded-lg text-xs disabled:opacity-40">
-                {installing ? "Installing…" : "Install"}
-              </button>
-            )}
-            {opencodeInfo?.installed && (
-              <button onClick={() => handleInstall("upgrade")} disabled={installing}
-                className="glass-btn px-4 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white disabled:opacity-40">
-                {installing ? "Upgrading…" : "Upgrade"}
-              </button>
-            )}
-          </div>
-        </div>
-        <code className="text-[11px] text-violet-200/80 font-mono block bg-violet-500/10 border border-violet-500/20 rounded-lg p-2.5">
-          curl -fsSL https://opencode.ai/install | bash
-        </code>
-      </div>
-
       {/* External API keys */}
       <div className="glass-card p-6 !transform-none animate-fade-up stagger-3">
         <h3 className="font-medium text-white mb-1 flex items-center gap-2 text-sm">
-          <KeyIcon size={15} className="text-fuchsia-400" /> External API keys
+          <KeyIcon size={15} className="text-amber-400" /> External API keys
         </h3>
-        <p className="text-xs text-zinc-500 mb-4">Optional — connect paid providers. Free agents work without keys.</p>
+        <p className="text-xs text-slate-500 mb-4">
+          Stored server-side in your profile — synced across every device you sign in on.
+        </p>
         <div className="space-y-2">
           {[
             { id: "anthropic", name: "Anthropic", models: "Claude Sonnet 4, Haiku 4" },
@@ -561,14 +652,18 @@ function SettingsTab({ user, guest, onLogout }: any) {
           ].map((p) => (
             <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium text-white">{p.name}</div>
-                <div className="text-[10px] text-zinc-600">{p.models}</div>
+                <div className="text-[13px] font-medium text-white flex items-center gap-2">
+                  {p.name}
+                  {apiKeys[p.id] && <CheckIcon size={12} className="text-emerald-400" />}
+                </div>
+                <div className="text-[10px] text-slate-600">{p.models}</div>
               </div>
-              <input type="password" placeholder="API key"
-                className="glass-input w-32 px-3 py-1.5 rounded-lg text-xs font-mono text-white placeholder-zinc-700" />
-              <button onClick={() => toast("Key saved via opencode SDK", "success")}
-                className="glass-btn px-3 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white">
-                Save
+              <input type="password" placeholder="API key" value={apiKeys[p.id] || ""}
+                onChange={(e) => setApiKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+                className="glass-input w-32 px-3 py-1.5 rounded-lg text-xs font-mono text-white placeholder-slate-700" />
+              <button onClick={() => saveKey(p.id)} disabled={savingKeys[p.id]}
+                className="glass-btn px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white disabled:opacity-40">
+                {savingKeys[p.id] ? "Saving…" : "Save"}
               </button>
             </div>
           ))}
@@ -577,14 +672,16 @@ function SettingsTab({ user, guest, onLogout }: any) {
 
       {/* Danger zone */}
       {guest && !user && (
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 animate-fade-up stagger-4">
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-6 animate-fade-up stagger-4">
           <h3 className="font-medium text-white mb-2 flex items-center gap-2 text-sm">
             <AlertIcon size={15} className="text-amber-400" /> Guest data
           </h3>
-          <p className="text-xs text-zinc-500 mb-4">Your guest chats live in this browser only. Clearing site data removes them.</p>
-          <button onClick={() => { localStorage.removeItem("founda_guest_sessions"); toast("Local chats cleared", "success"); }}
+          <p className="text-xs text-slate-500 mb-4">
+            Your chats and keys live in a server-side guest profile for this device. Creating an account migrates them permanently.
+          </p>
+          <button onClick={clearGuestData}
             className="glass-btn-danger px-4 py-2 rounded-lg text-sm">
-            Clear local chats
+            Delete server data for this device
           </button>
         </div>
       )}
