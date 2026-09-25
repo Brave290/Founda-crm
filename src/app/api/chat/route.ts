@@ -243,6 +243,15 @@ function streamRun(prep: Prep): Response {
       const steps = new Map<string, any>();
       const textParts = new Map<string, string>();
       const reasonParts = new Map<string, string>();
+      // opencode mirrors generation on two streams (legacy message.part.* and
+      // session.next.*). Each channel renders ONE source only, so mirrored
+      // content can never double up, and reasoning can never reach the text
+      // channel (message.part.delta.field is a *property* name — always
+      // "text" — not the part type, so it must never be used to classify).
+      const nextTextParts = new Map<string, string>();
+      const nextReasonParts = new Map<string, string>();
+      let textSrc: "part" | "next" | null = null;
+      let reasonSrc: "part" | "next" | null = null;
       const partKinds = new Map<string, "text" | "reasoning">();
       const assistantIds = new Set<string>();
       let todos: any[] = [];
@@ -270,7 +279,8 @@ function streamRun(prep: Prep): Response {
       const flushText = () => {
         if (!textDirty) return;
         textDirty = false;
-        send("delta", { text: [...textParts.values()].join("") });
+        const map = textSrc === "next" ? nextTextParts : textParts;
+        send("delta", { text: [...map.values()].join("") });
       };
       const markText = () => {
         textDirty = true;
@@ -279,11 +289,40 @@ function streamRun(prep: Prep): Response {
       const flushReason = () => {
         if (!reasonDirty) return;
         reasonDirty = false;
-        send("reason", { text: [...reasonParts.values()].join("") });
+        const map = reasonSrc === "next" ? nextReasonParts : reasonParts;
+        send("reason", { text: [...map.values()].join("") });
       };
       const markReason = () => {
         reasonDirty = true;
         if (!reasonTimer) reasonTimer = setTimeout(() => { reasonTimer = null; if (reasonDirty) flushReason(); }, 250);
+      };
+
+      // First contributor claims its channel; the mirrored stream is ignored.
+      const addPartText = (key: string, text: string) => {
+        if (textSrc === "next") return;
+        textSrc = "part";
+        const cur = textParts.get(key) || "";
+        if (text.length >= cur.length) textParts.set(key, text);
+        markText();
+      };
+      const addPartReason = (key: string, text: string) => {
+        if (reasonSrc === "next") return;
+        reasonSrc = "part";
+        const cur = reasonParts.get(key) || "";
+        if (text.length >= cur.length) reasonParts.set(key, text);
+        markReason();
+      };
+      const addNextText = (key: string, delta: string) => {
+        if (textSrc === "part") return;
+        textSrc = "next";
+        nextTextParts.set(key, (nextTextParts.get(key) || "") + delta);
+        markText();
+      };
+      const addNextReason = (key: string, delta: string) => {
+        if (reasonSrc === "part") return;
+        reasonSrc = "next";
+        nextReasonParts.set(key, (nextReasonParts.get(key) || "") + delta);
+        markReason();
       };
 
       // Failover/recovery restarts: drop partial state from the failed attempt.
@@ -291,6 +330,10 @@ function streamRun(prep: Prep): Response {
         steps.clear();
         textParts.clear();
         reasonParts.clear();
+        nextTextParts.clear();
+        nextReasonParts.clear();
+        textSrc = null;
+        reasonSrc = null;
         busy = true;
         markActivity();
         markText();
@@ -325,58 +368,35 @@ function streamRun(prep: Prep): Response {
             props.messageID && assistantIds.has(props.messageID)
           ) {
             const key = props.partID || props.messageID;
-            const kind =
-              props.field === "reasoning"
-                ? "reasoning"
-                : props.field === "text"
-                  ? "text"
-                  : partKinds.get(key) || null;
+            // Classify by part type (from message.part.updated) ONLY — the
+            // `field` property is just the part's property name ("text").
+            const kind = partKinds.get(key) || null;
             // Unknown kind → wait for message.part.updated to classify it;
             // authoritative part text arrives there anyway.
             if (kind === null) return;
-            partKinds.set(key, kind);
             if (kind === "reasoning") {
-              reasonParts.set(key, (reasonParts.get(key) || "") + props.delta);
-              markReason();
+              addPartReason(key, (reasonParts.get(key) || "") + props.delta);
             } else {
-              textParts.set(key, (textParts.get(key) || "") + props.delta);
-              markText();
+              addPartText(key, (textParts.get(key) || "") + props.delta);
             }
           }
         } else if (type === "session.next.reasoning.delta") {
           if (typeof props.delta === "string" && props.delta && props.sessionID) {
-            const key = props.textID || props.assistantMessageID || "next-reason";
-            reasonParts.set(key, (reasonParts.get(key) || "") + props.delta);
-            markReason();
+            addNextReason(props.reasoningID || props.assistantMessageID || "next-reason", props.delta);
           }
         } else if (type === "session.next.text.delta") {
           if (typeof props.delta === "string" && props.delta && props.sessionID) {
-            const key = props.textID || props.assistantMessageID || "next";
-            textParts.set(key, (textParts.get(key) || "") + props.delta);
-            markText();
+            addNextText(props.textID || props.assistantMessageID || "next", props.delta);
           }
         } else if (type === "message.part.updated") {
           const part = props.part;
           if (!part) return;
           if (part.type === "text" && !part.synthetic && typeof part.text === "string" && part.text && part.messageID) {
             partKinds.set(part.id, "text");
-            if (assistantIds.has(part.messageID)) {
-              // authoritative accumulated text; never regress a longer value
-              const cur = textParts.get(part.id) || "";
-              if (part.text.length >= cur.length) {
-                textParts.set(part.id, part.text);
-                markText();
-              }
-            }
+            if (assistantIds.has(part.messageID)) addPartText(part.id, part.text);
           } else if (part.type === "reasoning" && typeof part.text === "string" && part.text && part.messageID) {
             partKinds.set(part.id, "reasoning");
-            if (assistantIds.has(part.messageID)) {
-              const cur = reasonParts.get(part.id) || "";
-              if (part.text.length >= cur.length) {
-                reasonParts.set(part.id, part.text);
-                markReason();
-              }
-            }
+            if (assistantIds.has(part.messageID)) addPartReason(part.id, part.text);
           } else if (part.type === "tool") {
             const step = stepFromPart(part);
             if (step) {
