@@ -104,10 +104,10 @@ export const SKILLS: Skill[] = [
     category: "Image & Video",
     description: "Generate any image with Pollinations (free, no key) and show it inline.",
     triggers: ["draw", "generate image", "picture of", "illustration", "photo of", "logo", "artwork", "wallpaper"],
-    instructions: `Generate images with Pollinations (free, no key, works from any URL):
+    instructions: `Generate images with Pollinations (free, no key) — ALWAYS through the server proxy (it strips the watermark and retries on rate limits):
 1. Write a vivid prompt (subject, style, lighting, mood) and URL-encode it.
-2. Preferred (server-proxied with retries): ![description](${"${BASE}"}/api/image?prompt=<ENC>&width=1024&height=1024&seed=<random>)
-   Direct alternative: https://image.pollinations.ai/prompt/<ENC>?width=1024&height=1024&seed=<n>&model=flux&nologo=true
+2. Use ONLY this URL form (watermark-free): ![description](${"${BASE}"}/api/image?prompt=<ENC>&width=1024&height=1024&seed=<random>)
+   Never link image.pollinations.ai directly — it watermarks the image.
 3. The markdown image renders in chat immediately — no extra tooling needed.
 Sizes: square 1024x1024, banner 1280x720, portrait 768x1152, icon 512x512.
 Vary the seed for variants; keep width/height ≤ 1280 to stay fast.

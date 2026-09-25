@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
   const h = clamp(parseInt(req.nextUrl.searchParams.get("height") || ""), 64, 2048, 1024);
   const seed = clamp(parseInt(req.nextUrl.searchParams.get("seed") || ""), 0, 2_147_483_647, Math.floor(Math.random() * 1_000_000));
 
+  // nologo/private: Pollinations stamps a watermark on plain requests
   const url =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=${w}&height=${h}&nologo=true&seed=${seed}`;
+    `?width=${w}&height=${h}&nologo=true&private=true&seed=${seed}`;
 
   let lastStatus = 0;
   for (let attempt = 0; attempt < 3; attempt++) {

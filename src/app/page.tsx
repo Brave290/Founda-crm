@@ -52,7 +52,7 @@ export default function Home() {
 
   const handleGuest = () => {
     continueAsGuest();
-    router.push("/dashboard");
+    router.push(`/sessions/${crypto.randomUUID()}?guest=1`);
   };
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CopyIcon, CheckIcon, DownloadIcon } from "@/components/icons";
@@ -145,7 +145,7 @@ function CodeBlock({ className, children, node, onImageClick }: { className?: st
   );
 }
 
-export function Markdown({ content, onImageClick }: { content: string; onImageClick?: (src: string) => void }) {
+export const Markdown = memo(function Markdown({ content, onImageClick }: { content: string; onImageClick?: (src: string) => void }) {
   return (
     <div className="md-body text-sm leading-relaxed break-words">
       <ReactMarkdown
@@ -202,4 +202,4 @@ export function Markdown({ content, onImageClick }: { content: string; onImageCl
       </ReactMarkdown>
     </div>
   );
-}
+});

@@ -325,7 +325,16 @@ function streamRun(prep: Prep): Response {
             props.messageID && assistantIds.has(props.messageID)
           ) {
             const key = props.partID || props.messageID;
-            const kind = props.field === "reasoning" ? "reasoning" : partKinds.get(key) || "text";
+            const kind =
+              props.field === "reasoning"
+                ? "reasoning"
+                : props.field === "text"
+                  ? "text"
+                  : partKinds.get(key) || null;
+            // Unknown kind → wait for message.part.updated to classify it;
+            // authoritative part text arrives there anyway.
+            if (kind === null) return;
+            partKinds.set(key, kind);
             if (kind === "reasoning") {
               reasonParts.set(key, (reasonParts.get(key) || "") + props.delta);
               markReason();

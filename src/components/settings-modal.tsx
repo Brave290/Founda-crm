@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { UsagePanel, useToast } from "@/components/UsagePanel";
-import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon } from "@/components/icons";
+import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon, PlugIcon, KeyIcon, ChatIcon } from "@/components/icons";
+import { McpPanel } from "@/components/mcp-panel";
+import { loadGuestSessions, saveGuestSession } from "@/lib/auth";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { fetchJSON } from "@/lib/net";
 import { SKILLS, SKILL_CATEGORIES, type SkillCategory } from "@/lib/skills";
 
-type Tab = "account" | "model" | "usage" | "skills" | "schedule" | "data";
+type Tab = "account" | "model" | "mcp" | "keys" | "usage" | "skills" | "schedule" | "data";
 
 export function SettingsModal({
   open,
@@ -39,6 +41,7 @@ export function SettingsModal({
   const [skillCat, setSkillCat] = useState<"All" | SkillCategory>("All");
   const [customSkills, setCustomSkills] = useState<any[]>([]);
   const [importUrl, setImportUrl] = useState("");
+  const [importData, setImportData] = useState("");
   const [importing, setImporting] = useState(false);
   const { toast, Toaster } = useToast();
 
@@ -215,6 +218,23 @@ export function SettingsModal({
       .catch(() => {});
   };
 
+  const importSession = () => {
+    try {
+      const parsed = JSON.parse(importData);
+      saveGuestSession({
+        id: crypto.randomUUID(),
+        title: parsed.title || "Imported chat",
+        agent: parsed.agent_name || "build",
+        messages: parsed.state?.messages || [],
+        createdAt: new Date().toISOString(),
+      });
+      setImportData("");
+      toast(`Imported ${(parsed.state?.messages || []).length} messages`, "success");
+    } catch {
+      toast("Invalid JSON", "error");
+    }
+  };
+
   const doLogout = () => {
     logout();
     onClose();
@@ -224,6 +244,8 @@ export function SettingsModal({
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "account", label: "Account", icon: <UserIcon size={14} /> },
     { id: "model", label: "Model", icon: <LayersIcon size={14} /> },
+    { id: "mcp", label: "MCP", icon: <PlugIcon size={14} /> },
+    { id: "keys", label: "API keys", icon: <KeyIcon size={14} /> },
     { id: "usage", label: "Usage", icon: <BarChartIcon size={14} /> },
     {
       id: "skills",
@@ -266,12 +288,12 @@ export function SettingsModal({
             <button
               onClick={() => {
                 onClose();
-                router.push("/dashboard");
+                router.push(`/sessions/${crypto.randomUUID()}${user ? "" : "?guest=1"}`);
               }}
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] w-full transition-colors"
             >
-              <ExternalLinkIcon size={13} />
-              Dashboard
+              <ChatIcon size={13} />
+              New chat
             </button>
           </div>
         </div>
@@ -393,6 +415,8 @@ export function SettingsModal({
               </div>
             )}
 
+            {tab === "mcp" && <McpPanel />}
+            {tab === "keys" && <ApiKeysPanel onToast={toast} />}
             {tab === "usage" && (
               <div>
                 <UsagePanel />
@@ -675,6 +699,19 @@ export function SettingsModal({
                     Open a chat and use /export json · md · png.
                   </p>
                 </div>
+                <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                  <div className="text-[14px] text-white mb-1">Import a chat</div>
+                  <p className="text-[12.5px] text-slate-500 mb-3">
+                    Paste session JSON exported from here or another Founda install.
+                  </p>
+                  <textarea value={importData} onChange={(e) => setImportData(e.target.value)} rows={3}
+                    placeholder={'{"title": "...", "state": {"messages": [...]}}'}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-[12px] font-mono text-white placeholder-slate-600 resize-none focus:outline-none focus:border-white/20 transition-colors" />
+                  <button onClick={importSession} disabled={!importData.trim()}
+                    className="mt-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-medium transition-colors disabled:opacity-40">
+                    Import
+                  </button>
+                </div>
                 <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-4">
                   <div className="text-[14px] text-white mb-1">Delete all data</div>
                   <p className="text-[12.5px] text-slate-500 mb-3">
@@ -691,6 +728,72 @@ export function SettingsModal({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── API keys (moved from the old dashboard) ──
+function ApiKeysPanel({ onToast }: { onToast: (msg: string, type?: any) => void }) {
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    import("@/lib/store")
+      .then(async (st) => {
+        await st.ready();
+        setApiKeys({ ...st.getApiKeys() });
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveKey = async (provider: string) => {
+    setSavingKeys((s) => ({ ...s, [provider]: true }));
+    try {
+      const st = await import("@/lib/store");
+      st.saveApiKey(provider, apiKeys[provider] || "");
+      await st.ready();
+      onToast("Key saved to your account", "success");
+    } catch {
+      onToast("Could not save key", "error");
+    }
+    setSavingKeys((s) => ({ ...s, [provider]: false }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="text-[14px] text-white mb-1 flex items-center gap-2">
+          <KeyIcon size={15} className="text-amber-400" /> External API keys
+        </div>
+        <p className="text-[12.5px] text-slate-500">
+          Stored server-side in your profile — synced across every device you sign in on. Models using these keys appear in the Model picker.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {[
+          { id: "anthropic", name: "Anthropic", models: "Claude Sonnet 4, Haiku 4" },
+          { id: "openai", name: "OpenAI", models: "GPT-4o, GPT-4o Mini" },
+          { id: "google", name: "Google", models: "Gemini 2.0" },
+          { id: "groq", name: "Groq", models: "Llama 3 (free tier)" },
+        ].map((p) => (
+          <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-white flex items-center gap-2">
+                {p.name}
+                {apiKeys[p.id] && <CheckIcon size={12} className="text-emerald-400" />}
+              </div>
+              <div className="text-[10px] text-slate-600">{p.models}</div>
+            </div>
+            <input type="password" placeholder="API key" value={apiKeys[p.id] || ""}
+              onChange={(e) => setApiKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+              className="w-32 px-3 py-1.5 rounded-lg text-xs font-mono text-white bg-black/40 border border-white/10 placeholder-slate-700 focus:outline-none focus:border-white/20" />
+            <button onClick={() => saveKey(p.id)} disabled={savingKeys[p.id]}
+              className="px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.08] transition-colors disabled:opacity-40">
+              {savingKeys[p.id] ? "Saving…" : "Save"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

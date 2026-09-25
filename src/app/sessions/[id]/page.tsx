@@ -7,7 +7,7 @@ import { useAuth, loadGuestSessions, saveGuestSession } from "@/lib/auth";
 import { trackUsage, canSend, loadUsage, UsagePanel, useToast } from "@/components/UsagePanel";
 import {
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, BotIcon,
-  ImageIcon, MicIcon, SendIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
+  ImageIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
   AlertIcon, ChevronDownIcon, CheckIcon, MenuIcon,
   ShieldIcon, DownloadIcon, TrashIcon, LayersIcon, BarChartIcon,
 } from "@/components/icons";
@@ -17,6 +17,7 @@ import { Sidebar } from "@/components/sidebar";
 import { SettingsModal } from "@/components/settings-modal";
 import { AgentActivity, type AgentActivityData } from "@/components/agent-activity";
 import { buildAuditPrompt } from "@/lib/skills";
+import { ChatInputDock, COMMANDS, type ChatInputHandle } from "@/components/chat-input";
 
 interface Message {
   id?: string;
@@ -43,16 +44,6 @@ const SUGGESTIONS = [
   "Add tests to my component",
 ];
 
-const COMMANDS = [
-  { cmd: "/clear", desc: "Clear this conversation" },
-  { cmd: "/help", desc: "List all commands" },
-  { cmd: "/audit", desc: "Run a security audit (args: scope or pasted code)", arg: true },
-  { cmd: "/model", desc: "Set model — /model pollinations/openai-fast", arg: true },
-  { cmd: "/agent", desc: "Switch agent — /agent plan", arg: true },
-  { cmd: "/image", desc: "Generate an image — /image a red fox", arg: true },
-  { cmd: "/export", desc: "Export chat — /export json | md | png", arg: true },
-];
-
 export default function ChatPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -65,13 +56,10 @@ export default function ChatPage() {
 
   const { user, guest, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [activeAgent, setActiveAgent] = useState("build");
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceSupported, setVoiceSupported] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -87,19 +75,19 @@ export default function ChatPage() {
   const [soundOn, setSoundOn] = useState(false);
   const [online, setOnline] = useState(true);
   const [atBottom, setAtBottom] = useState(true);
+  const [scrollPct, setScrollPct] = useState(0);
+  const [speedMode, setSpeedMode] = useState<"fast" | "think">("think");
   const [editFrom, setEditFrom] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const stopRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
   const [showModelPicker, setShowModelPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputApiRef = useRef<ChatInputHandle>(null);
+  const titleRef = useRef("New chat");
   const [supabase, setSupabase] = useState<any>(null);
   const { toast, Toaster } = useToast();
 
@@ -107,21 +95,11 @@ export default function ChatPage() {
     import("@/lib/supabase-browser").then(({ createSupabaseBrowserClient }) => {
       setSupabase(createSupabaseBrowserClient());
     }).catch(() => {});
-    setVoiceSupported(
-      typeof window !== "undefined" &&
-        ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
-    );
     const usage = loadUsage();
     if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
   }, []);
 
-  const showCmdList = input.startsWith("/") && !sending;
-  const filteredCmds = showCmdList
-    ? COMMANDS.filter((c) => c.cmd.startsWith(input.split(/\s/)[0]))
-    : [];
   const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
-
-  useEffect(() => setCmdIdx(0), [input]);
 
   // Cmd/Ctrl+K command palette
   useEffect(() => {
@@ -145,6 +123,20 @@ export default function ChatPage() {
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [router]);
+
+  // Close any open dropdown when clicking outside it (all popovers close on outside click)
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t || typeof t.closest !== "function") return;
+      if (t.closest("[data-popover]")) return;
+      setShowAgentPicker(false);
+      setShowModelPicker(false);
+      setShowUsage(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
   // Offline banner + completion-sound preference
   useEffect(() => {
@@ -170,6 +162,7 @@ export default function ChatPage() {
         await store.ready();
         const m = store.getPrefs().model;
         if (typeof m === "string" && m) setModel(m);
+        if (store.getPrefs().speedMode === "fast") setSpeedMode("fast");
       })
       .catch(() => {});
   }, []);
@@ -184,6 +177,7 @@ export default function ChatPage() {
         if (session) {
           setMessages(session.messages || []);
           setActiveAgent(session.agent || "build");
+          titleRef.current = session.title || "New chat";
         }
       }).catch(() => {});
     } else if (supabase && user) {
@@ -200,20 +194,14 @@ export default function ChatPage() {
       if (data) {
         setMessages(data.state?.messages || []);
         setActiveAgent(data.agent_name || "build");
+        titleRef.current = data.title || "New chat";
       }
     } catch {}
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamText]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
-    }
-  }, [input]);
+    if (atBottom) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamText, atBottom]);
 
   const saveMessages = async (updated: Message[]) => {
     if (isGuest || guest) {
@@ -223,15 +211,34 @@ export default function ChatPage() {
         sessions[idx].messages = updated;
         sessions[idx].agent = activeAgent;
         saveGuestSession(sessions[idx]);
+      } else if (updated.length > 0) {
+        saveGuestSession({
+          id: sessionId,
+          title: titleRef.current || "New chat",
+          agent: activeAgent,
+          messages: updated,
+          createdAt: new Date().toISOString(),
+        });
       }
     } else if (supabase && user) {
       try {
-        await supabase.from("sessions").update({
+        const { error } = await supabase.from("sessions").update({
           state: { messages: updated },
           message_count: updated.length,
           agent_name: activeAgent,
           updated_at: new Date().toISOString(),
         }).eq("id", sessionId);
+        if (error) {
+          await supabase.from("sessions").insert({
+            id: sessionId,
+            user_id: user.id,
+            title: titleRef.current || "New chat",
+            agent_name: activeAgent,
+            state: { messages: updated },
+            message_count: updated.length,
+            updated_at: new Date().toISOString(),
+          });
+        }
       } catch {}
     }
   };
@@ -365,8 +372,7 @@ export default function ChatPage() {
   };
 
   const runSlash = async (cmd: string, arg: string) => {
-    setInput("");
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    inputApiRef.current?.set("");
     if (cmd === "/clear") {
       setMessages([]);
       setOcSessionId(null);
@@ -421,9 +427,9 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async (opts?: { prompt?: string; label?: string; systemPrompt?: string }) => {
+  const sendMessage = async (opts?: { prompt?: string; label?: string; systemPrompt?: string; text?: string; from?: number }) => {
     const overridePrompt = opts?.prompt;
-    const body = overridePrompt ?? input.trim();
+    const body = overridePrompt ?? (opts?.text ?? "").trim();
     if ((!body && !attachedImage) || sending) return;
     if (!canSend()) {
       setLimitReached(true);
@@ -438,12 +444,13 @@ export default function ChatPage() {
       ts: Date.now(),
     };
     const bodyImage = overridePrompt ? null : attachedImage || null;
-    const base = editFrom != null ? messages.slice(0, editFrom) : messages;
+    const fromIdx = opts?.from ?? editFrom;
+    const base = fromIdx != null ? messages.slice(0, fromIdx) : messages;
     const updated = [...base, userMsg];
     setEditFrom(null);
     stopRef.current = false;
     setMessages(updated);
-    if (!overridePrompt) setInput("");
+    if (!overridePrompt) inputApiRef.current?.set("");
     if (updated.length === 1) renameSession(String(opts?.label || body).slice(0, 60));
     setAttachedImage(null);
     setSending(true);
@@ -462,138 +469,187 @@ export default function ChatPage() {
         setThoughtMs(Date.now() - thinkStart);
       }
     };
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-
     saveMessages(updated).catch(() => {});
     let lastContent = "";
 
     try {
-      const ctl = new AbortController();
-      abortRef.current = ctl;
-      setTimeout(() => ctl.abort(), 55_000);
       const payload: any = {
         sessionId: ocSessionId || sessionId,
         prompt: overridePrompt || userMsg.content,
         history: base.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
         agent: activeAgent,
         stream: true,
+        ...(speedMode === "fast" ? { mode: "fast" } : {}),
         ...(model ? { model } : {}),
         ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
         ...(bodyImage ? { image: bodyImage } : {}),
       };
 
-      // one silent retry for flaky networks before surfacing an error
-      let res: Response | null = null;
-      for (let netTry = 0; netTry < 2 && !res; netTry++) {
+      let content = "";
+      let metadata: any;
+      let streamErr: string | null = null;
+      let done = false;
+      let ctl: AbortController | null = null;
+
+      // 3 attempts, 150s each — timeouts and connection drops retry silently in
+      // the background; the user only ever sees an error if every attempt fails.
+      const ATTEMPTS = 3;
+      for (let netTry = 0; netTry < ATTEMPTS && !done && !streamErr && !stopRef.current; netTry++) {
+        if (netTry > 0) {
+          setStreamText("");
+          setStreamReason("");
+          reasonText = "";
+          reasonAutoOpened = false;
+          answerCollapsed = false;
+          content = "";
+          done = false;
+          streamErr = null;
+          setActivity({
+            busy: true,
+            todos: [],
+            steps: [{ id: "reconnect", tool: "network", title: "Reconnecting…", detail: `attempt ${netTry + 1} of ${ATTEMPTS}`, status: "running", output: "" }],
+          });
+          await new Promise((r) => setTimeout(r, 700 * netTry));
+          if (stopRef.current) break;
+        }
+        ctl = new AbortController();
+        abortRef.current = ctl;
+        const timer = setTimeout(() => ctl!.abort(), 150_000);
         try {
-          res = await fetch("/api/chat", {
+          const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
             signal: ctl.signal,
           });
-        } catch (e) {
-          if (ctl.signal.aborted || netTry === 1) throw e;
-          await new Promise((r) => setTimeout(r, 800));
-        }
-      }
-      if (!res) throw new Error("Network error");
+          const contentType = res.headers.get("content-type") || "";
 
-      const contentType = res.headers.get("content-type") || "";
-      let content = "";
-      let metadata: any;
-      let streamErr: string | null = null;
-      let done = false;
-
-      if (res.ok && contentType.includes("text/event-stream") && res.body) {
-        try {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        const handleEvent = (name: string, data: any) => {
-          if (name === "activity") {
-            if (Array.isArray(data.steps)) setActivity(data as AgentActivityData);
-          } else if (name === "reason") {
-            reasonText = typeof data.text === "string" ? data.text : "";
-            setStreamReason(reasonText);
-            if (reasonText && !reasonAutoOpened) {
-              reasonAutoOpened = true;
-              setReasonOpen(true);
+          if (res.ok && contentType.includes("text/event-stream") && res.body) {
+            try {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+            const handleEvent = (name: string, data: any) => {
+              if (name === "activity") {
+                if (Array.isArray(data.steps)) setActivity(data as AgentActivityData);
+              } else if (name === "reason") {
+                reasonText = typeof data.text === "string" ? data.text : "";
+                setStreamReason(reasonText);
+                if (reasonText && !reasonAutoOpened) {
+                  reasonAutoOpened = true;
+                  setReasonOpen(true);
+                }
+              } else if (name === "delta") {
+                content = typeof data.text === "string" ? data.text : content;
+                lastContent = content;
+                setStreamText(content);
+                if (content && reasonText) collapseReason();
+              } else if (name === "done") {
+                done = true;
+                if (typeof data.content === "string" && data.content) content = data.content;
+                lastContent = content;
+                if (data.sessionId) setOcSessionId(data.sessionId);
+                metadata = data.metadata;
+                collapseReason();
+                if (reasonText) {
+                  metadata = { ...(metadata || {}), reasoning: reasonText, thoughtMs: Date.now() - thinkStart };
+                }
+              } else if (name === "error") {
+                streamErr = data.error || "stream error";
+              }
+            };
+            while (true) {
+              const { done: readDone, value } = await reader.read();
+              if (readDone) break;
+              buf += decoder.decode(value, { stream: true });
+              let sep: number;
+              while ((sep = buf.indexOf("\n\n")) !== -1) {
+                const chunk = buf.slice(0, sep);
+                buf = buf.slice(sep + 2);
+                let evName = "";
+                let dataStr = "";
+                for (const line of chunk.split("\n")) {
+                  if (line.startsWith("event: ")) evName = line.slice(7);
+                  else if (line.startsWith("data: ")) dataStr += line.slice(6);
+                }
+                if (evName && dataStr) {
+                  try { handleEvent(evName, JSON.parse(dataStr)); } catch {}
+                }
+              }
             }
-          } else if (name === "delta") {
-            content = typeof data.text === "string" ? data.text : content;
-            lastContent = content;
-            setStreamText(content);
-            if (content && reasonText) collapseReason();
-          } else if (name === "done") {
+            } catch {
+              /* stream broke mid-way — handled below */
+            }
+          } else {
+            // Non-stream fallback: plain JSON (error or legacy path)
+            const data = await res.json().catch(() => ({} as any));
+            if (data.error) streamErr = data.error;
+            else {
+              content = data.content || "";
+              lastContent = content;
+              if (data.sessionId) setOcSessionId(data.sessionId);
+              metadata = data.metadata;
+              done = Boolean(content);
+            }
+          }
+
+          // Stream died mid-way → one silent non-stream recovery before retrying
+          if (!done && !streamErr && !content && !stopRef.current && !ctl.signal.aborted) {
+            try {
+              const r2 = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...payload, stream: false }),
+                signal: ctl.signal,
+              });
+              const d2 = await r2.json().catch(() => ({} as any));
+              if (d2.content) {
+                content = d2.content;
+                lastContent = content;
+                metadata = d2.metadata;
+                if (d2.sessionId) setOcSessionId(d2.sessionId);
+                done = true;
+                setStreamText("");
+              }
+            } catch {}
+          }
+          if (stopRef.current) {
+            if (!content) content = lastContent || "(stopped)";
             done = true;
-            if (typeof data.content === "string" && data.content) content = data.content;
-            lastContent = content;
-            if (data.sessionId) setOcSessionId(data.sessionId);
-            metadata = data.metadata;
-            collapseReason();
-            if (reasonText) {
-              metadata = { ...(metadata || {}), reasoning: reasonText, thoughtMs: Date.now() - thinkStart };
-            }
-          } else if (name === "error") {
-            streamErr = data.error || "stream error";
+            break;
           }
-        };
-        while (true) {
-          const { done: readDone, value } = await reader.read();
-          if (readDone) break;
-          buf += decoder.decode(value, { stream: true });
-          let sep: number;
-          while ((sep = buf.indexOf("\n\n")) !== -1) {
-            const chunk = buf.slice(0, sep);
-            buf = buf.slice(sep + 2);
-            let evName = "";
-            let dataStr = "";
-            for (const line of chunk.split("\n")) {
-              if (line.startsWith("event: ")) evName = line.slice(7);
-              else if (line.startsWith("data: ")) dataStr += line.slice(6);
-            }
-            if (evName && dataStr) {
-              try { handleEvent(evName, JSON.parse(dataStr)); } catch {}
-            }
+          if (ctl.signal.aborted && !done) {
+            const te: any = new Error("timeout");
+            te.name = "AbortError";
+            throw te;
           }
-        }
-        } catch {
-          /* stream broke mid-way — handled below */
-        }
-      } else {
-        // Non-stream fallback: plain JSON (error or legacy path)
-        const data = await res.json().catch(() => ({} as any));
-        if (data.error) streamErr = data.error;
-        else {
-          content = data.content || "";
-          if (data.sessionId) setOcSessionId(data.sessionId);
-          metadata = data.metadata;
+          if (!done && !streamErr && !content) {
+            const ce: any = new Error("Connection lost");
+            ce.name = "RetryableError";
+            throw ce;
+          }
+        } catch (e: any) {
+          if (stopRef.current) {
+            content = content || lastContent || "(stopped)";
+            done = true;
+            break;
+          }
+          const finalTry = netTry === ATTEMPTS - 1;
+          if (e?.name === "AbortError") {
+            if (finalTry) streamErr = "The model is taking too long — tap Retry";
+            continue;
+          }
+          if (finalTry) {
+            streamErr = e?.message === "Connection lost" ? "Connection lost — tap Retry" : e?.message || "Network error";
+            break;
+          }
+          // any other failure → silent background retry
+        } finally {
+          clearTimeout(timer);
         }
       }
 
-      // Network died mid-stream → one silent non-stream retry before giving up
-      if (!done && !streamErr && !content && !stopRef.current) {
-        try {
-          const r2 = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...payload, stream: false }),
-            signal: ctl.signal,
-          });
-          const d2 = await r2.json().catch(() => ({} as any));
-          if (d2.content) {
-            content = d2.content;
-            lastContent = content;
-            metadata = d2.metadata;
-            if (d2.sessionId) setOcSessionId(d2.sessionId);
-            done = true;
-            setStreamText("");
-          }
-        } catch {}
-        if (!done) streamErr = "Connection lost — tap Retry";
-      }
-      if (ctl.signal.aborted && !stopRef.current && !streamErr) streamErr = "Request timed out (55s) — tap Retry";
+      if (!done && !streamErr && !stopRef.current) streamErr = "Automatic retries didn't help — tap Retry";
       if (stopRef.current && !content) content = "(stopped)";
 
       const reply: Message = streamErr
@@ -613,7 +669,7 @@ export default function ChatPage() {
       const msg = stopRef.current
         ? lastContent || "(stopped)"
         : aborted
-          ? "Error: Request timed out (55s) — tap Retry"
+          ? "Error: No response after automatic retries — tap Retry"
           : `Error: ${err.message}`;
       const withErr = [...updated, { role: "assistant" as const, content: msg, ts: Date.now() }];
       setMessages(withErr);
@@ -628,36 +684,11 @@ export default function ChatPage() {
     }
   };
 
-  const toggleVoice = () => {
-    if (!voiceSupported) { toast("Voice not supported in this browser", "error"); return; }
-    if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); return; }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const rec = new SR();
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    rec.onresult = (e: any) => {
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      setInput(t);
-    };
-    rec.onend = () => setIsRecording(false);
-    rec.onerror = () => setIsRecording(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsRecording(true);
-  };
-
   const readFile = (file: File) => {
     if (file.size > 10 * 1024 * 1024) { toast("Image must be under 10MB", "error"); return; }
     const reader = new FileReader();
     reader.onload = () => setAttachedImage(reader.result as string);
     reader.readAsDataURL(file);
-  };
-
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) readFile(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -669,21 +700,18 @@ export default function ChatPage() {
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const it of Array.from(items)) {
-      if (it.type.startsWith("image/")) {
-        const file = it.getAsFile();
-        if (file) { e.preventDefault(); readFile(file); }
-      }
-    }
-  };
-
   const onScrollMessages = () => {
     const el = scrollRef.current;
     if (!el) return;
     setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 100);
+    const max = el.scrollHeight - el.clientHeight;
+    setScrollPct(max > 0 ? el.scrollTop / max : 0);
+  };
+  const toggleSpeed = () => {
+    const next = speedMode === "fast" ? "think" : "fast";
+    setSpeedMode(next);
+    import("@/lib/store").then((st) => st.savePrefs({ speedMode: next })).catch(() => {});
+    toast(next === "fast" ? "⚡ Fast mode — quick direct answers" : "🧠 Think mode — deeper reasoning", "success");
   };
   const scrollToEnd = () => {
     const el = scrollRef.current;
@@ -728,6 +756,7 @@ export default function ChatPage() {
 
   const renameSession = async (title: string) => {
     if (!title) return;
+    titleRef.current = title;
     try {
       if (isGuest || guest) {
         const sessions = loadGuestSessions();
@@ -735,9 +764,28 @@ export default function ChatPage() {
         if (idx >= 0) {
           sessions[idx].title = title;
           saveGuestSession(sessions[idx]);
+        } else {
+          saveGuestSession({
+            id: sessionId,
+            title,
+            agent: activeAgent,
+            messages: [],
+            createdAt: new Date().toISOString(),
+          });
         }
       } else if (supabase && user) {
-        await supabase.from("sessions").update({ title }).eq("id", sessionId);
+        const { error } = await supabase.from("sessions").update({ title }).eq("id", sessionId);
+        if (error) {
+          await supabase.from("sessions").insert({
+            id: sessionId,
+            user_id: user.id,
+            title,
+            agent_name: activeAgent,
+            state: { messages: [] },
+            message_count: 0,
+            updated_at: new Date().toISOString(),
+          });
+        }
       }
     } catch {}
   };
@@ -749,29 +797,11 @@ export default function ChatPage() {
     setTimeout(() => setCopiedIdx(null), 1500);
   };
 
-  const regenerate = async () => {
+  const regenerate = () => {
     if (sending || messages.length < 2) return;
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    setMessages(messages.slice(0, -1));
-    if (lastUser) { setInput(lastUser.content); setTimeout(() => sendMessage(), 50); }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showCmdList && filteredCmds.length > 0) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setCmdIdx((i) => (i + 1) % filteredCmds.length); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); setCmdIdx((i) => (i - 1 + filteredCmds.length) % filteredCmds.length); return; }
-      if (e.key === "Tab") { e.preventDefault(); setInput(filteredCmds[cmdIdx].cmd + " "); return; }
-      if (e.key === "Escape") { e.preventDefault(); setInput(""); return; }
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        const sel = filteredCmds[cmdIdx];
-        const rest = input.slice(sel.cmd.length).trim();
-        if (input.split(/\s/)[0] === sel.cmd) runSlash(sel.cmd, rest);
-        else setInput(sel.cmd + " ");
-        return;
-      }
-    }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    const ui = messages.map((m) => m.role).lastIndexOf("user");
+    if (ui < 0) return;
+    sendMessage({ prompt: messages[ui].content, label: messages[ui].content, from: ui });
   };
 
   if (authLoading) {
@@ -796,7 +826,7 @@ export default function ChatPage() {
   const paletteActions: PaletteAction[] = [
     { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest ? "?guest=1" : ""}`) },
     { id: "audit", group: "Chat", label: "Run security audit", hint: "/audit", icon: <ShieldIcon size={14} />, run: () => runSlash("/audit", "") },
-    { id: "image", group: "Chat", label: "Generate an image…", hint: "/image", icon: <ImageIcon size={14} />, run: () => { setInput("/image "); setTimeout(() => textareaRef.current?.focus(), 50); } },
+    { id: "image", group: "Chat", label: "Generate an image…", hint: "/image", icon: <ImageIcon size={14} />, run: () => { inputApiRef.current?.set("/image "); setTimeout(() => inputApiRef.current?.focus(), 50); } },
     { id: "export-json", group: "Chat", label: "Export chat as JSON", hint: "/export json", icon: <DownloadIcon size={14} />, run: () => exportChat("json") },
     { id: "export-md", group: "Chat", label: "Export chat as Markdown", hint: "/export md", icon: <DownloadIcon size={14} />, run: () => exportChat("md") },
     { id: "export-png", group: "Chat", label: "Export chat as PNG image", hint: "/export png", icon: <ImageIcon size={14} />, run: () => exportPNG() },
@@ -810,20 +840,21 @@ export default function ChatPage() {
       run: () => { setActiveAgent(a.id); toast(`Agent: ${a.name}`, "success"); },
     })),
     { id: "help", group: "Navigation", label: "Show commands help", hint: "/help", icon: <ClipboardIcon size={14} />, run: () => runSlash("/help", "") },
-    { id: "dashboard", group: "Navigation", label: "Go to dashboard", hint: "sessions & settings", icon: <LayersIcon size={14} />, run: () => router.push("/dashboard") },
+    { id: "settings", group: "Navigation", label: "Open settings", hint: "model · skills · mcp · keys", icon: <LayersIcon size={14} />, run: () => { setSettingsTab(undefined); setSettingsOpen(true); } },
     { id: "usage", group: "Navigation", label: "Toggle usage panel", hint: "limits & quota", icon: <BarChartIcon size={14} />, run: () => setShowUsage((v) => !v) },
     { id: "skills", group: "Navigation", label: "Browse plugin skills", hint: "image · video · search · more", icon: <LayersIcon size={14} />, run: () => { setSettingsTab("skills"); setSettingsOpen(true); } },
   ];
 
   return (
-    <div className="h-screen flex bg-[#0b0f17]">
+    <div className="h-[100dvh] flex bg-[#0b0f17]">
       <Toaster />
       <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} currentId={sessionId} onOpenSettings={() => { setSettingsTab(undefined); setSettingsOpen(true); }} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsTab} />
 
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden bg-[#0b0f17]">
       {/* Header */}
-      <header className="h-12 px-2 sm:px-4 flex items-center justify-between shrink-0 relative z-20 border-b border-white/[0.06]">
+      <header className="h-12 px-2 sm:px-4 flex items-center justify-between shrink-0 sticky top-0 z-30 border-b border-white/[0.06] bg-[#0b0f17]/85 backdrop-blur-xl">
+        <div className="absolute left-0 bottom-0 h-[2px] bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 transition-[width] duration-200" style={{ width: `${Math.round(scrollPct * 100)}%`, opacity: scrollPct > 0.01 ? 1 : 0 }} aria-hidden />
         <div className="flex items-center gap-1 min-w-0">
           <button onClick={() => setDrawerOpen(true)}
             className="lg:hidden p-2 -ml-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06]" title="Menu">
@@ -838,12 +869,12 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => router.push("/dashboard")}
+          <button onClick={() => { setSettingsTab(undefined); setSettingsOpen(true); }}
             className="hidden lg:block text-[12.5px] text-slate-500 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors">
-            Dashboard
+            Settings
           </button>
           {/* Agent picker */}
-          <div className="relative">
+          <div className="relative" data-popover="agent">
             <button onClick={() => setShowAgentPicker(!showAgentPicker)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-300 hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
               <span className={`h-2 w-2 rounded-full ${activeAgentMeta?.dot || "bg-emerald-400"}`} />
@@ -852,7 +883,7 @@ export default function ChatPage() {
               <ChevronDownIcon size={12} className="text-slate-500" />
             </button>
             {showAgentPicker && (
-              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#141a26] shadow-2xl shadow-black/60 z-50 py-1.5 animate-scale-in overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-gradient-to-b from-[#1b2542] to-[#101728] backdrop-blur-2xl shadow-2xl shadow-black/70 z-50 py-1.5 animate-scale-in overflow-hidden">
                 <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-slate-600">Free agents</div>
                 {AGENTS.map((a) => (
                   <button key={a.id}
@@ -875,7 +906,7 @@ export default function ChatPage() {
           </div>
 
           {/* Model picker */}
-          <div className="relative">
+          <div className="relative" data-popover="model">
             <button onClick={() => setShowModelPicker(!showModelPicker)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-300 hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
               title="Model">
@@ -888,7 +919,7 @@ export default function ChatPage() {
               <ChevronDownIcon size={12} className="text-slate-500" />
             </button>
             {showModelPicker && (
-              <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-white/10 bg-[#141a26] shadow-2xl shadow-black/60 z-50 py-1.5 animate-scale-in overflow-hidden max-h-[60vh] overflow-y-auto">
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-white/10 bg-gradient-to-b from-[#1b2542] to-[#101728] backdrop-blur-2xl shadow-2xl shadow-black/70 z-50 py-1.5 animate-scale-in overflow-hidden max-h-[60vh] overflow-y-auto">
                 <button onClick={() => pickModel("")}
                   className={`w-full text-left px-4 py-2 hover:bg-white/[0.06] flex items-center justify-between transition-colors ${!model ? "text-white bg-white/[0.08]" : "text-slate-400"}`}>
                   <span className="text-[13px]">Auto (default)</span>
@@ -922,6 +953,24 @@ export default function ChatPage() {
             )}
           </div>
 
+          <button onClick={toggleSpeed}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] border transition-colors ${
+              speedMode === "fast"
+                ? "border-amber-400/40 bg-amber-500/10 text-amber-200"
+                : "border-white/[0.08] bg-white/[0.03] text-slate-400 hover:text-white"
+            }`}
+            title="Fast mode answers instantly · Think mode reasons deeper">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11L9.5 22 19 10h-6.5L13 2z" /></svg>
+            <span className="hidden sm:inline">{speedMode === "fast" ? "Fast" : "Think"}</span>
+          </button>
+
+          <button onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors" title="Back to top">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          </button>
+
           <button onClick={() => setShowUsage(!showUsage)}
             className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors" title="Usage">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -933,7 +982,7 @@ export default function ChatPage() {
 
       {/* Usage sidebar */}
       {showUsage && (
-        <div className="absolute right-2 top-16 z-40 w-80 animate-slide-right">
+        <div className="absolute right-2 top-16 z-40 w-80 animate-slide-right" data-popover="usage">
           <UsagePanel />
         </div>
       )}
@@ -1014,7 +1063,7 @@ export default function ChatPage() {
                       <span className="truncate max-w-[170px]" title={msg.metadata.model}>· {msg.metadata.model}</span>
                     )}
                     {msg.role === "user" && i === lastUserIdx && !sending && !msg.image && (
-                      <button onClick={() => { setEditFrom(i); setInput(String(msg.content)); setTimeout(() => textareaRef.current?.focus(), 30); }}
+                      <button onClick={() => { setEditFrom(i); inputApiRef.current?.set(String(msg.content)); setTimeout(() => inputApiRef.current?.focus(), 30); }}
                         className="ml-auto hover:text-white transition-colors">
                         Edit &amp; resend
                       </button>
@@ -1022,7 +1071,7 @@ export default function ChatPage() {
                   </div>
 
                   {msg.role === "assistant" && (
-                    <div className="flex items-center gap-1 mt-2 -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="flex items-center gap-1 mt-2 -ml-1.5 transition-opacity duration-200">
                       <button onClick={() => copyMsg(msg.content, i)}
                         className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors" title="Copy">
                         {copiedIdx === i ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
@@ -1152,87 +1201,22 @@ export default function ChatPage() {
             </button>
           )}
           {sending && activity && <AgentActivity activity={activity} />}
-          {showCmdList && filteredCmds.length > 0 && (
-            <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/[0.09] bg-[#141a26] shadow-2xl shadow-black/60 py-1.5 overflow-hidden animate-scale-in z-30">
-              <div className="px-4 py-1 text-[10px] uppercase tracking-wider text-slate-600">Commands</div>
-              {filteredCmds.map((c, i) => (
-                <button key={c.cmd}
-                  onMouseEnter={() => setCmdIdx(i)}
-                  onClick={() => {
-                    if (input.split(/\s/)[0] === c.cmd) runSlash(c.cmd, input.slice(c.cmd.length).trim());
-                    else setInput(c.cmd + " ");
-                  }}
-                  className={`w-full text-left px-4 py-2 flex items-center gap-3 transition-colors ${i === cmdIdx ? "bg-white/[0.07] text-white" : "text-slate-400"}`}>
-                  <span className={`font-mono text-[12.5px] ${i === cmdIdx ? "text-white" : "text-slate-500"}`}>{c.cmd}</span>
-                  <span className="text-[12px] text-slate-600 truncate">{c.desc}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {editFrom != null && (
-            <div className="mb-2 flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-400/30 text-[11.5px] text-amber-200 animate-scale-in">
-              <span>Editing message — your next send replaces the conversation from there</span>
-              <button onClick={() => setEditFrom(null)} className="text-amber-300 hover:text-white shrink-0 transition-colors">Cancel</button>
-            </div>
-          )}
-          {attachedImage && (
-            <div className="mb-2 relative inline-block animate-scale-in">
-              <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-white/10" />
-              <button onClick={() => setAttachedImage(null)}
-                className="absolute -top-2 -right-2 h-5 w-5 bg-[#1a2130] border border-white/15 text-slate-300 rounded-full flex items-center justify-center text-xs hover:text-white transition-colors">×</button>
-            </div>
-          )}
-
-          <div className="flex items-end gap-2 rounded-2xl px-3 py-2.5 bg-[#141b2a]/90 backdrop-blur-xl border border-white/[0.09] focus-within:border-white/25 shadow-[0_16px_50px_-12px_rgba(0,0,0,0.7)] transition-colors">
-            <button onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-lg text-slate-500 hover:text-amber-300 transition-colors shrink-0" title="Upload image">
-              <ImageIcon size={18} />
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-
-            <textarea ref={textareaRef} value={input}
-              onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste}
-              placeholder={`Message ${activeAgentMeta?.name}…`}
-              rows={1} disabled={limitReached}
-              className="flex-1 bg-transparent resize-none text-sm text-white placeholder-slate-600 focus:outline-none max-h-[200px] py-1.5" />
-
-            <button onClick={toggleVoice}
-              className={`p-2 rounded-lg transition-all shrink-0 ${
-                isRecording ? "bg-red-500/15 text-red-400 animate-pulse" : "text-slate-500 hover:text-sky-300"
-              }`} title="Voice input">
-              <MicIcon size={18} />
-            </button>
-
-            <button onClick={() => (sending ? stopGeneration() : sendMessage())}
-              disabled={!sending && ((!input.trim() && !attachedImage) || limitReached)}
-              className={`p-2.5 rounded-xl transition-colors shrink-0 ${
-                sending
-                  ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 active:scale-95"
-                  : (!input.trim() && !attachedImage) || limitReached
-                    ? "bg-white/[0.06] text-slate-700"
-                    : "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95"
-              }`} title={sending ? "Stop generating" : "Send (Enter)"}>
-              {sending ? (
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor"><rect x="3" y="3" width="9" height="9" rx="1.5"/></svg>
-              ) : (
-                <SendIcon size={17} />
-              )}
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between mt-2 px-1">
-            <div className="flex items-center gap-3 text-[10px] text-slate-700">
-              {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
-                <>Enter send · / commands · ⌘K palette{voiceSupported && " · voice"}</>}
-              {input.length > 0 && <span className="tabular-nums">{input.length.toLocaleString()} chars</span>}
-              <button onClick={toggleSound}
-                className={`transition-colors ${soundOn ? "text-emerald-500" : "hover:text-white"}`}
-                title="Toggle completion sound">
-                Sound {soundOn ? "on" : "off"}
-              </button>
-            </div>
-            <div className="text-[10px] text-slate-700">Founda</div>
-          </div>
+          <ChatInputDock
+            ref={inputApiRef}
+            sending={sending}
+            limitReached={limitReached}
+            soundOn={soundOn}
+            editing={editFrom != null}
+            attachedImage={attachedImage}
+            agentName={activeAgentMeta?.name || "Assistant"}
+            onSend={(t) => sendMessage({ text: t })}
+            onStop={stopGeneration}
+            onCommand={runSlash}
+            onAttach={readFile}
+            onRemoveImage={() => setAttachedImage(null)}
+            onCancelEdit={() => setEditFrom(null)}
+            onToggleSound={toggleSound}
+          />
         </div>
       </div>
       </div>
