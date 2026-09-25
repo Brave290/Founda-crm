@@ -446,14 +446,19 @@ export async function getAvailableAgents(): Promise<any[]> {
 
 // --- Provider / Model Info ---
 
+let lastModelError: string | null = null;
+export function getLastError() { return lastModelError; }
+
 export async function listNativeModels(): Promise<any[]> {
   try {
-    const c = await ensureServer();
+    const c = await ensureServer() as any;
     const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
-    const res: any = await c.model.list({ location: { directory } });
+    const res: any = await c.v2.model.list({ location: { directory } });
     const data = res?.data?.data || res?.data;
+    lastModelError = res?.error ? JSON.stringify(res.error) : null;
     return Array.isArray(data) ? data : [];
-  } catch {
+  } catch (e: any) {
+    lastModelError = e?.message || String(e);
     return [];
   }
 }
