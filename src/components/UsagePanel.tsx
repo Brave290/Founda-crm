@@ -5,8 +5,8 @@ import { CheckCircleIcon, XCircleIcon, InfoIcon } from "@/components/icons";
 
 // ── Usage tracking (localStorage for guests, Supabase for logged in) ──
 
-const DAILY_LIMIT = 50; // messages per day
-const TOKEN_LIMIT = 50000; // tokens per day
+const DAILY_LIMIT = 1_000_000; // messages per day (soft anti-abuse cap)
+const TOKEN_LIMIT = 5_000_000_000; // 5 billion tokens per day — effectively unlimited for normal use
 
 interface UsageState {
   messagesUsed: number;
@@ -67,6 +67,13 @@ export function resetUsage() {
 export function canSend(): boolean {
   const usage = loadUsage();
   return usage.messagesUsed < usage.dailyLimit;
+}
+
+export function formatTokens(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(n % 1_000_000_000 === 0 ? 0 : 1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
 
 // ── Countdown hook ──
@@ -154,7 +161,7 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
         <div className="flex justify-between text-xs mb-1.5">
           <span className="text-zinc-500">Tokens today</span>
           <span className="font-mono text-zinc-300">
-            {(usage.tokensUsed / 1000).toFixed(1)}k / {(usage.tokenLimit / 1000).toFixed(0)}k
+            {formatTokens(usage.tokensUsed)} / {formatTokens(usage.tokenLimit)}
           </span>
         </div>
         <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
