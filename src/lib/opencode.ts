@@ -313,7 +313,7 @@ function engineConfig() {
   const permission = { edit: "allow" as const, bash: "allow" as const, webfetch: "allow" as const };
   return {
     $schema: "https://opencode.ai/config.json",
-    model: process.env.OPENCODE_DEFAULT_MODEL || "pollinations/openai",
+    model: process.env.OPENCODE_DEFAULT_MODEL || "opencode/mimo-v2.6-flash-free",
     provider: {
       pollinations: {
         npm: "@ai-sdk/openai-compatible",
@@ -445,6 +445,18 @@ export async function getAvailableAgents(): Promise<any[]> {
 }
 
 // --- Provider / Model Info ---
+
+export async function listNativeModels(): Promise<any[]> {
+  try {
+    const c = await ensureServer();
+    const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+    const res: any = await c.model.list({ location: { directory } });
+    const data = res?.data?.data || res?.data;
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function getProviders(): Promise<any[]> {
   try {

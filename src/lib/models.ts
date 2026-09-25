@@ -27,54 +27,6 @@ export const MODEL_CATALOG: CatalogProvider[] = [
       { id: "pollinations/openai", label: "GPT-OSS 20B · free" },
     ],
   },
-  {
-    provider: "groq",
-    label: "Groq",
-    env: "GROQ_API_KEY",
-    storeKey: "groq",
-    models: [
-      { id: "groq/llama-3.3-70b-versatile", label: "Llama 3.3 70B · free tier" },
-      { id: "groq/llama-3.1-8b-instant", label: "Llama 3.1 8B · free tier" },
-    ],
-  },
-  {
-    provider: "google",
-    label: "Google Gemini",
-    env: "GEMINI_API_KEY",
-    storeKey: "gemini",
-    models: [
-      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash · free tier" },
-      { id: "google/gemini-2.0-flash", label: "Gemini 2.0 Flash · free tier" },
-    ],
-  },
-  {
-    provider: "openrouter",
-    label: "OpenRouter",
-    env: "OPENROUTER_API_KEY",
-    storeKey: "openrouter",
-    models: [
-      { id: "openrouter/deepseek/deepseek-chat-v3-0324:free", label: "DeepSeek V3 · free" },
-      { id: "openrouter/meta-llama/llama-3.3-70b-instruct:free", label: "Llama 3.3 70B · free" },
-    ],
-  },
-  {
-    provider: "mistral",
-    label: "Mistral",
-    env: "MISTRAL_API_KEY",
-    storeKey: "mistral",
-    models: [
-      { id: "mistral/mistral-small-latest", label: "Mistral Small · free tier" },
-    ],
-  },
-  {
-    provider: "cerebras",
-    label: "Cerebras",
-    env: "CEREBRAS_API_KEY",
-    storeKey: "cerebras",
-    models: [
-      { id: "cerebras/llama-3.3-70b", label: "Llama 3.3 70B · free tier" },
-    ],
-  },
 ];
 
 export interface ResolvedModel extends CatalogModel {
@@ -134,4 +86,41 @@ export function keyForModel(
   if (!entry) return null;
   const key = (entry.storeKey && storeKeys[entry.storeKey]) || (entry.env && env[entry.env]);
   return key ? { provider, key } : null;
+}
+
+/** Merge opencode's native free catalog (opencode/* models like mimo, nemotron). */
+export function mergeNativeModels(native: any[], storeKeys: Record<string, string> = {}, env: NodeJS.ProcessEnv = process.env): ResolvedModel[] {
+  const seen = new Set(MODEL_CATALOG.flatMap((p) => p.models.map((m) => m.id)));
+  const out: ResolvedModel[] = [];
+  for (const m of native) {
+    if (!m || m.enabled === false || m.status === "deprecated") continue;
+    const id = `${m.providerID}/${m.id}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const isFree = m.providerID === "opencode";
+    const entry = MODEL_CATALOG.find((p) => p.provider === m.providerID);
+    const source: ResolvedModel["source"] = isFree
+      ? "keyless"
+      : entry
+        ? hasKeyAny(entry, storeKeys, env)
+        : "none";
+    out.push({
+      id,
+      label: m.name || m.id,
+      provider: m.providerID,
+      providerLabel: isFree ? "opencode · free" : m.providerID,
+      available: source !== "none",
+      source,
+    });
+  }
+  // free opencode models first
+  out.sort((a, b) => Number(b.available) - Number(a.available));
+  return out;
+}
+
+function hasKeyAny(p: CatalogProvider, storeKeys: Record<string, string>, env: NodeJS.ProcessEnv) {
+  if (p.keyless) return "keyless" as const;
+  if (p.storeKey && storeKeys[p.storeKey]) return "store" as const;
+  if (p.env && env[p.env]) return "env" as const;
+  return "none" as const;
 }

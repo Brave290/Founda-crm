@@ -218,6 +218,7 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
   const [showImport, setShowImport] = useState(false);
   const [accountSessions, setAccountSessions] = useState<any[]>([]);
   const [loadingAcct, setLoadingAcct] = useState(false);
+  const [query, setQuery] = useState("");
 
   const loadAccountSessions = async () => {
     if (!user) return;
@@ -280,7 +281,18 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
     }
   };
 
-  const sessions = user ? null : guestSessions;
+  const q = query.toLowerCase().trim();
+  const filteredAcct = q
+    ? accountSessions.filter((s: any) => (s.title || "Untitled chat").toLowerCase().includes(q))
+    : accountSessions;
+  const sessions = user
+    ? null
+    : q
+      ? guestSessions.filter((s: GuestSession) =>
+          (s.title || "").toLowerCase().includes(q) ||
+          (s.messages || []).some((m: any) => String(m.content || "").toLowerCase().includes(q))
+        )
+      : guestSessions;
 
   return (
     <div>
@@ -307,6 +319,16 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
             New chat
           </button>
         </div>
+      </div>
+
+      <div className="relative mb-4">
+        <SearchIcon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search chats by title or message…"
+          className="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600"
+        />
       </div>
 
       {showImport && (
@@ -338,7 +360,12 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
                 <p className="text-[13px] text-slate-500">Start a new chat to begin.</p>
               </div>
             )}
-            {accountSessions.map((s: any, i: number) => (
+            {!loadingAcct && accountSessions.length > 0 && filteredAcct.length === 0 && (
+              <div className="text-center py-10 glass-card">
+                <p className="text-[13px] text-slate-500">No chats match “{query}”.</p>
+              </div>
+            )}
+            {filteredAcct.map((s: any, i: number) => (
               <div key={s.id}
                 className={`glass-card p-4 flex items-center justify-between group animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
                 <button onClick={() => router.push(`/sessions/${s.id}`)} className="flex-1 text-left min-w-0">
@@ -363,8 +390,8 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
             {sessions!.length === 0 && (
               <div className="text-center py-16 glass-card">
                 <ChatIcon size={28} className="mx-auto mb-3 text-emerald-400" />
-                <p className="text-slate-400 mb-1 text-sm">No chats yet.</p>
-                <p className="text-[13px] text-slate-500">Start a new chat to begin.</p>
+                <p className="text-slate-400 mb-1 text-sm">{q ? `No chats match “${query}”.` : "No chats yet."}</p>
+                {!q && <p className="text-[13px] text-slate-500">Start a new chat to begin.</p>}
               </div>
             )}
             {sessions!.map((session: GuestSession, i: number) => (

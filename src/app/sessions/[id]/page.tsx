@@ -45,6 +45,7 @@ const COMMANDS = [
   { cmd: "/audit", desc: "Run a security audit (args: scope or pasted code)", arg: true },
   { cmd: "/model", desc: "Set model — /model pollinations/openai-fast", arg: true },
   { cmd: "/agent", desc: "Switch agent — /agent plan", arg: true },
+  { cmd: "/image", desc: "Generate an image — /image a red fox", arg: true },
   { cmd: "/export", desc: "Export chat — /export json | md | png", arg: true },
 ];
 
@@ -68,6 +69,7 @@ export default function ChatPage() {
   const [limitReached, setLimitReached] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [model, setModel] = useState<string>("");
+  const [ocSessionId, setOcSessionId] = useState<string | null>(null);
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
@@ -320,6 +322,7 @@ export default function ChatPage() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     if (cmd === "/clear") {
       setMessages([]);
+      setOcSessionId(null);
       await saveMessages([]);
       toast("Conversation cleared", "success");
       return;
@@ -350,6 +353,19 @@ export default function ChatPage() {
       else exportChat(arg === "md" || arg === "markdown" ? "md" : "json");
       return;
     }
+    if (cmd === "/image") {
+      if (!arg) { toast("Usage: /image a red fox in the snow", "error"); return; }
+      const seed = Math.floor(Math.random() * 1_000_000);
+      const src = `/api/image?prompt=${encodeURIComponent(arg)}&width=1024&height=1024&seed=${seed}`;
+      const userMsg: Message = { role: "user", content: `/image ${arg}` };
+      const imgMsg: Message = { role: "assistant", content: arg, image: src };
+      const withMsgs = [...messages, userMsg, imgMsg];
+      setMessages(withMsgs);
+      await saveMessages(withMsgs);
+      trackUsage(1, 800);
+      toast("Generating image…", "success");
+      return;
+    }
     if (cmd === "/audit") {
       await sendMessage({
         prompt: buildAuditPrompt(arg),
@@ -373,6 +389,7 @@ export default function ChatPage() {
       content: opts?.label || body,
       image: overridePrompt ? undefined : attachedImage || undefined,
     };
+    const bodyImage = overridePrompt ? null : attachedImage || null;
     const updated = [...messages, userMsg];
     setMessages(updated);
     if (!overridePrompt) setInput("");
@@ -380,28 +397,31 @@ export default function ChatPage() {
     setSending(true);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    await saveMessages(updated);
+    saveMessages(updated).catch(() => {});
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: isGuest ? null : sessionId,
+          sessionId: ocSessionId,
           prompt: overridePrompt || userMsg.content,
+          history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
           agent: activeAgent,
           ...(model ? { model } : {}),
           ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
+          ...(bodyImage ? { image: bodyImage } : {}),
         }),
       });
       const data = await res.json();
+      if (data.sessionId) setOcSessionId(data.sessionId);
       const reply: Message = data.error
         ? { role: "assistant", content: `Error: ${data.error}` }
         : { role: "assistant", content: data.content || "(empty response)", metadata: data.metadata };
 
       const withReply = [...updated, reply];
       setMessages(withReply);
-      await saveMessages(withReply);
+      saveMessages(withReply).catch(() => {});
 
       const estTokens = Math.ceil((userMsg.content.length + reply.content.length) / 4);
       const usage = trackUsage(1, estTokens);
@@ -409,7 +429,7 @@ export default function ChatPage() {
     } catch (err: any) {
       const withErr = [...updated, { role: "assistant" as const, content: `Error: ${err.message}` }];
       setMessages(withErr);
-      await saveMessages(withErr);
+      saveMessages(withErr).catch(() => {});
     } finally {
       setSending(false);
     }
@@ -498,6 +518,7 @@ export default function ChatPage() {
   const paletteActions: PaletteAction[] = [
     { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest ? "?guest=1" : ""}`) },
     { id: "audit", group: "Chat", label: "Run security audit", hint: "/audit", icon: <ShieldIcon size={14} />, run: () => runSlash("/audit", "") },
+    { id: "image", group: "Chat", label: "Generate an image…", hint: "/image", icon: <ImageIcon size={14} />, run: () => { setInput("/image "); setTimeout(() => textareaRef.current?.focus(), 50); } },
     { id: "export-json", group: "Chat", label: "Export chat as JSON", hint: "/export json", icon: <DownloadIcon size={14} />, run: () => exportChat("json") },
     { id: "export-md", group: "Chat", label: "Export chat as Markdown", hint: "/export md", icon: <DownloadIcon size={14} />, run: () => exportChat("md") },
     { id: "export-png", group: "Chat", label: "Export chat as PNG image", hint: "/export png", icon: <ImageIcon size={14} />, run: () => exportPNG() },
@@ -680,7 +701,10 @@ export default function ChatPage() {
                       ? "msg-user"
                       : `msg-bot border-l-2 ${activeAgentMeta?.border || "border-l-teal-400/70"}`
                   }`}>
-                    {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-lg mb-2 border border-white/15" />}
+                    {msg.image && (
+                      <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
+                        className="max-w-xs w-full rounded-lg mb-2 border border-white/15 bg-slate-900/60 animate-fade-in" />
+                    )}
                     {msg.role === "assistant" ? (
                       <Markdown content={msg.content} />
                     ) : (
@@ -767,7 +791,7 @@ export default function ChatPage() {
             <textarea ref={textareaRef} value={input}
               onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
               placeholder={`Message ${activeAgentMeta?.name}…`}
-              rows={1} disabled={sending || limitReached}
+              rows={1} disabled={limitReached}
               className="flex-1 bg-transparent resize-none text-sm text-white placeholder-slate-600 focus:outline-none max-h-[200px] py-1.5" />
 
             <button onClick={toggleVoice}
