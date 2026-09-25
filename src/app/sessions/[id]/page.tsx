@@ -15,6 +15,7 @@ import { Markdown } from "@/components/markdown";
 import { CommandPalette, type PaletteAction } from "@/components/palette";
 import { Sidebar } from "@/components/sidebar";
 import { SettingsModal } from "@/components/settings-modal";
+import { AgentActivity, type AgentActivityData } from "@/components/agent-activity";
 import { buildAuditPrompt } from "@/lib/skills";
 
 interface Message {
@@ -74,6 +75,7 @@ export default function ChatPage() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [model, setModel] = useState<string>("");
   const [ocSessionId, setOcSessionId] = useState<string | null>(null);
+  const [activity, setActivity] = useState<AgentActivityData | null>(null);
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
@@ -399,22 +401,44 @@ export default function ChatPage() {
     if (!overridePrompt) setInput("");
     setAttachedImage(null);
     setSending(true);
+    setActivity(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     saveMessages(updated).catch(() => {});
 
     try {
+      // Pre-create the engine session so live activity (todos/tools) can stream in
+      // while the prompt is still running.
+      let targetOc = ocSessionId;
+      let preCreated = false;
+      if (!targetOc) {
+        try {
+          const cr = await fetch("/api/agent/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: (opts?.label || body).slice(0, 60), agent: activeAgent }),
+          });
+          const cd = await cr.json();
+          if (cd.sessionId) {
+            targetOc = cd.sessionId;
+            preCreated = true;
+            setOcSessionId(cd.sessionId);
+          }
+        } catch {}
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: ocSessionId,
+          sessionId: targetOc || sessionId,
           prompt: overridePrompt || userMsg.content,
           history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
           agent: activeAgent,
           ...(model ? { model } : {}),
           ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
           ...(bodyImage ? { image: bodyImage } : {}),
+          ...(preCreated ? { replay: messages.length > 0 } : {}),
         }),
       });
       const data = await res.json();
@@ -438,6 +462,26 @@ export default function ChatPage() {
       setSending(false);
     }
   };
+
+  // Manus-style live activity: poll tool/todo state while a prompt is running.
+  useEffect(() => {
+    if (!sending || !ocSessionId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const r = await fetch(`/api/agent/activity?session=${ocSessionId}`);
+        if (r.ok) {
+          const d = await r.json();
+          if (!cancelled && Array.isArray(d.steps)) setActivity(d as AgentActivityData);
+        }
+      } catch {}
+      if (!cancelled) timer = setTimeout(tick, 1000);
+    };
+    timer = setTimeout(tick, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [sending, ocSessionId]);
 
   const toggleVoice = () => {
     if (!voiceSupported) { toast("Voice not supported in this browser", "error"); return; }
@@ -753,6 +797,7 @@ export default function ChatPage() {
       {/* Input */}
       <div className="border-t border-white/[0.06] px-4 py-3 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto relative">
+          {sending && activity && <AgentActivity activity={activity} />}
           {showCmdList && filteredCmds.length > 0 && (
             <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/[0.09] bg-[#141a26] shadow-2xl shadow-black/60 py-1.5 overflow-hidden animate-scale-in z-30">
               <div className="px-4 py-1 text-[10px] uppercase tracking-wider text-slate-600">Commands</div>

@@ -49,3 +49,28 @@ export async function readStoreForRequest(req: Request): Promise<Record<string, 
   if (!t) return null;
   return readStoreData(t);
 }
+
+/** Persist SMTP/email config into the owner's server-side settings.prefs.email. */
+export async function saveSettingsEmail(t: StoreTarget, smtp: any): Promise<void> {
+  const clean = smtp && smtp.user && smtp.pass
+    ? {
+        host: String(smtp.host || "smtp.gmail.com"),
+        port: Number(smtp.port) || 587,
+        user: String(smtp.user),
+        pass: String(smtp.pass),
+      }
+    : null;
+  if (t.kind === "user") {
+    const { data } = await supa.from("profiles").select("settings").eq("id", t.id).maybeSingle();
+    const settings = data?.settings || {};
+    const prefs = settings.prefs || {};
+    settings.prefs = { ...prefs, email: clean };
+    await supa.from("profiles").upsert({ id: t.id, settings, updated_at: new Date().toISOString() });
+    return;
+  }
+  const { data } = await supa.from("guest_data").select("data").eq("device_id", t.id).maybeSingle();
+  const store = data?.data || {};
+  store.settings = store.settings || { apiKeys: {}, prefs: {}, usage: {} };
+  store.settings.prefs = { ...(store.settings.prefs || {}), email: clean };
+  await supa.from("guest_data").upsert({ device_id: t.id, data: store });
+}

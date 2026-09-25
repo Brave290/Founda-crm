@@ -15,7 +15,7 @@ function splitModel(m: string): { providerID: string; modelID: string } {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, prompt, agent, model, systemPrompt, image, history } =
+    const { sessionId, prompt, agent, model, systemPrompt, image, history, replay: replayHint } =
       await request.json();
     const hist: { role: string; content: string }[] = Array.isArray(history)
       ? history.slice(-12)
@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     // old clients are ignored and a fresh session is created with history replay.
     const sessionFromClient = typeof sessionId === "string" && sessionId.startsWith("ses_");
     let ocSession: string | null = sessionFromClient ? sessionId : null;
-    let replay = !ocSession; // fresh session → fold conversation history into the prompt
+    // Fresh sessions fold prior history into the prompt. Client may pre-create an
+    // empty opencode session (for live activity polling) and explicitly ask to replay.
+    let replay = typeof replayHint === "boolean" ? replayHint : !ocSession;
 
     const createSession = async () => {
       const createParams: any = {
