@@ -129,39 +129,58 @@ export function Sidebar({
             </div>
           )}
 
-          {acctItems.length > 0 && (
-            <>
-              <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-slate-600">
-                Your chats
-              </div>
-              {acctItems.map((s) => (
-                <HistoryItem
-                  key={s.id}
-                  active={s.id === currentId}
-                  title={s.title || "Untitled chat"}
-                  meta={new Date(s.updated_at).toLocaleDateString()}
-                  onClick={() => go(`/sessions/${s.id}`)}
-                />
-              ))}
-            </>
-          )}
+          {(() => {
+            const rows = [
+              ...acctItems.map((s) => ({
+                id: s.id as string,
+                title: s.title || "Untitled chat",
+                ts: new Date(s.updated_at).getTime(),
+                href: `/sessions/${s.id}`,
+                guest: false,
+              })),
+              ...guestItems.map((s) => ({
+                id: s.id as string,
+                title: s.title || "Untitled chat",
+                ts: new Date(s.createdAt).getTime(),
+                href: `/sessions/${s.id}${user ? "" : "?guest=1"}`,
+                guest: true,
+              })),
+            ].sort((a, b) => b.ts - a.ts);
 
-          {guestItems.length > 0 && (
-            <>
-              <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-slate-600">
-                {user ? "This device" : "Recent"}
-              </div>
-              {guestItems.map((s) => (
-                <HistoryItem
-                  key={s.id}
-                  active={s.id === currentId}
-                  title={s.title || "Untitled chat"}
-                  meta={new Date(s.createdAt).toLocaleDateString()}
-                  onClick={() => go(`/sessions/${s.id}${user ? "" : "?guest=1"}`)}
-                />
-              ))}
-            </>
-          )}
+            const now = Date.now();
+            const day = 86_400_000;
+            const buckets: { label: string; list: typeof rows }[] = [
+              { label: "Today", list: [] },
+              { label: "Yesterday", list: [] },
+              { label: "Previous 7 days", list: [] },
+              { label: "Older", list: [] },
+            ];
+            for (const r of rows) {
+              const age = now - r.ts;
+              if (age < day) buckets[0].list.push(r);
+              else if (age < 2 * day) buckets[1].list.push(r);
+              else if (age < 8 * day) buckets[2].list.push(r);
+              else buckets[3].list.push(r);
+            }
+            return buckets.map((b) =>
+              b.list.length ? (
+                <div key={b.label}>
+                  <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-slate-600">
+                    {b.label}
+                  </div>
+                  {b.list.map((r) => (
+                    <HistoryItem
+                      key={r.id}
+                      active={r.id === currentId}
+                      title={r.title}
+                      meta={new Date(r.ts).toLocaleDateString()}
+                      onClick={() => go(r.href)}
+                    />
+                  ))}
+                </div>
+              ) : null
+            );
+          })()}
         </nav>
 
         {/* profile → settings */}

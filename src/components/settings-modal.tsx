@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { UsagePanel, useToast } from "@/components/UsagePanel";
 import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon } from "@/components/icons";
 import { DEFAULT_MODEL } from "@/lib/models";
+import { fetchJSON } from "@/lib/net";
 
 type Tab = "account" | "model" | "usage" | "schedule" | "data";
 
@@ -34,9 +35,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   const loadTasks = async () => {
     try {
       const h = await headers();
-      const r = await fetch("/api/tasks", { headers: h });
-      if (!r.ok) return;
-      const d = await r.json();
+      const d = await fetchJSON("/api/tasks", { headers: h }, { timeoutMs: 12_000, retries: 2 });
       if (Array.isArray(d.tasks)) setTasks(d.tasks);
       if (d.email && (d.email.user || d.email.host)) {
         setSmtp((v) => ({ ...v, host: d.email.host || v.host, port: String(d.email.port || v.port), user: d.email.user || v.user }));
@@ -80,8 +79,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
 
   useEffect(() => {
     if (!open) return;
-    fetch("/api/models")
-      .then((r) => r.json())
+    fetchJSON("/api/models", {}, { timeoutMs: 15_000, retries: 2 })
       .then((d) => setModels(Array.isArray(d.models) ? d.models.filter((m: any) => m.available) : []))
       .catch(() => {});
     import("@/lib/store")

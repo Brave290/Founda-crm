@@ -449,7 +449,13 @@ export async function getAvailableAgents(): Promise<any[]> {
 let lastModelError: string | null = null;
 export function getLastError() { return lastModelError; }
 
+let nativeModelsCache: { at: number; data: any[] } | null = null;
+
 export async function listNativeModels(): Promise<any[]> {
+  // 120s cache — cold engine retries are slow and repeat often
+  if (nativeModelsCache && Date.now() - nativeModelsCache.at < 120_000) {
+    return nativeModelsCache.data;
+  }
   try {
     const c = await ensureServer() as any;
     const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
@@ -460,10 +466,14 @@ export async function listNativeModels(): Promise<any[]> {
       const res: any = await c.v2.model.list({ location: { directory } });
       lastModelError = res?.error ? JSON.stringify(res.error) : null;
       const data = res?.data?.data || res?.data;
-      if (Array.isArray(data) && data.length) return data;
+      if (Array.isArray(data) && data.length) {
+        nativeModelsCache = { at: Date.now(), data };
+        return data;
+      }
       if (Array.isArray(data)) last = data;
       await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
     }
+    nativeModelsCache = { at: Date.now(), data: last };
     return last;
   } catch (e: any) {
     lastModelError = e?.message || String(e);

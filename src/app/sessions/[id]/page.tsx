@@ -24,6 +24,7 @@ interface Message {
   content: string;
   image?: string;
   metadata?: any;
+  ts?: number;
 }
 
 const AGENTS = [
@@ -81,6 +82,14 @@ export default function ChatPage() {
   const [reasonOpen, setReasonOpen] = useState(false);
   const [thoughtMs, setThoughtMs] = useState(0);
   const [expandedReason, setExpandedReason] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [atBottom, setAtBottom] = useState(true);
+  const [editFrom, setEditFrom] = useState<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const stopRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
@@ -109,6 +118,7 @@ export default function ChatPage() {
   const filteredCmds = showCmdList
     ? COMMANDS.filter((c) => c.cmd.startsWith(input.split(/\s/)[0]))
     : [];
+  const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
 
   useEffect(() => setCmdIdx(0), [input]);
 
@@ -119,9 +129,34 @@ export default function ChatPage() {
         e.preventDefault();
         setPaletteOpen((o) => !o);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        router.push(`/sessions/${crypto.randomUUID()}`);
+      }
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+        setShowModelPicker(false);
+        setLightbox(null);
+        setExpandedReason(null);
+        setEditFrom(null);
+      }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
+  }, [router]);
+
+  // Offline banner + completion-sound preference
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    import("@/lib/store").then((st) => st.ready().then(() => setSoundOn(Boolean(st.getPrefs().notifySound)))).catch(() => {});
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
   }, []);
 
   useEffect(() => {
@@ -399,11 +434,16 @@ export default function ChatPage() {
       role: "user",
       content: opts?.label || body,
       image: overridePrompt ? undefined : attachedImage || undefined,
+      ts: Date.now(),
     };
     const bodyImage = overridePrompt ? null : attachedImage || null;
-    const updated = [...messages, userMsg];
+    const base = editFrom != null ? messages.slice(0, editFrom) : messages;
+    const updated = [...base, userMsg];
+    setEditFrom(null);
+    stopRef.current = false;
     setMessages(updated);
     if (!overridePrompt) setInput("");
+    if (updated.length === 1) renameSession(String(opts?.label || body).slice(0, 60));
     setAttachedImage(null);
     setSending(true);
     setActivity(null);
@@ -424,22 +464,39 @@ export default function ChatPage() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     saveMessages(updated).catch(() => {});
+    let lastContent = "";
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: ocSessionId || sessionId,
-          prompt: overridePrompt || userMsg.content,
-          history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
-          agent: activeAgent,
-          stream: true,
-          ...(model ? { model } : {}),
-          ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
-          ...(bodyImage ? { image: bodyImage } : {}),
-        }),
-      });
+      const ctl = new AbortController();
+      abortRef.current = ctl;
+      setTimeout(() => ctl.abort(), 55_000);
+      const payload: any = {
+        sessionId: ocSessionId || sessionId,
+        prompt: overridePrompt || userMsg.content,
+        history: base.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
+        agent: activeAgent,
+        stream: true,
+        ...(model ? { model } : {}),
+        ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
+        ...(bodyImage ? { image: bodyImage } : {}),
+      };
+
+      // one silent retry for flaky networks before surfacing an error
+      let res: Response | null = null;
+      for (let netTry = 0; netTry < 2 && !res; netTry++) {
+        try {
+          res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: ctl.signal,
+          });
+        } catch (e) {
+          if (ctl.signal.aborted || netTry === 1) throw e;
+          await new Promise((r) => setTimeout(r, 800));
+        }
+      }
+      if (!res) throw new Error("Network error");
 
       const contentType = res.headers.get("content-type") || "";
       let content = "";
@@ -448,6 +505,7 @@ export default function ChatPage() {
       let done = false;
 
       if (res.ok && contentType.includes("text/event-stream") && res.body) {
+        try {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = "";
@@ -463,11 +521,13 @@ export default function ChatPage() {
             }
           } else if (name === "delta") {
             content = typeof data.text === "string" ? data.text : content;
+            lastContent = content;
             setStreamText(content);
             if (content && reasonText) collapseReason();
           } else if (name === "done") {
             done = true;
             if (typeof data.content === "string" && data.content) content = data.content;
+            lastContent = content;
             if (data.sessionId) setOcSessionId(data.sessionId);
             metadata = data.metadata;
             collapseReason();
@@ -497,7 +557,9 @@ export default function ChatPage() {
             }
           }
         }
-        if (!done && !streamErr && !content) streamErr = "Connection ended unexpectedly";
+        } catch {
+          /* stream broke mid-way — handled below */
+        }
       } else {
         // Non-stream fallback: plain JSON (error or legacy path)
         const data = await res.json().catch(() => ({} as any));
@@ -509,9 +571,34 @@ export default function ChatPage() {
         }
       }
 
+      // Network died mid-stream → one silent non-stream retry before giving up
+      if (!done && !streamErr && !content && !stopRef.current) {
+        try {
+          const r2 = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...payload, stream: false }),
+            signal: ctl.signal,
+          });
+          const d2 = await r2.json().catch(() => ({} as any));
+          if (d2.content) {
+            content = d2.content;
+            lastContent = content;
+            metadata = d2.metadata;
+            if (d2.sessionId) setOcSessionId(d2.sessionId);
+            done = true;
+            setStreamText("");
+          }
+        } catch {}
+        if (!done) streamErr = "Connection lost — tap Retry";
+      }
+      if (ctl.signal.aborted && !stopRef.current && !streamErr) streamErr = "Request timed out (55s) — tap Retry";
+      if (stopRef.current && !content) content = "(stopped)";
+
       const reply: Message = streamErr
-        ? { role: "assistant", content: `Error: ${streamErr}` }
-        : { role: "assistant", content: content || "(empty response)", metadata };
+        ? { role: "assistant", content: `Error: ${streamErr}`, ts: Date.now() }
+        : { role: "assistant", content: content || "(empty response)", metadata, ts: Date.now() };
+      if (!streamErr) beep();
 
       const withReply = [...updated, reply];
       setMessages(withReply);
@@ -521,10 +608,18 @@ export default function ChatPage() {
       const usage = trackUsage(1, estTokens);
       if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
     } catch (err: any) {
-      const withErr = [...updated, { role: "assistant" as const, content: `Error: ${err.message}` }];
+      const aborted = err?.name === "AbortError" || abortRef.current?.signal?.aborted;
+      const msg = stopRef.current
+        ? lastContent || "(stopped)"
+        : aborted
+          ? "Error: Request timed out (55s) — tap Retry"
+          : `Error: ${err.message}`;
+      const withErr = [...updated, { role: "assistant" as const, content: msg, ts: Date.now() }];
       setMessages(withErr);
       saveMessages(withErr).catch(() => {});
     } finally {
+      abortRef.current = null;
+      stopRef.current = false;
       setSending(false);
       setStreamText("");
       setStreamReason("");
@@ -552,13 +647,98 @@ export default function ChatPage() {
     setIsRecording(true);
   };
 
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const readFile = (file: File) => {
     if (file.size > 10 * 1024 * 1024) { toast("Image must be under 10MB", "error"); return; }
     const reader = new FileReader();
     reader.onload = () => setAttachedImage(reader.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) readFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      readFile(file);
+      toast("Image attached", "success");
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of Array.from(items)) {
+      if (it.type.startsWith("image/")) {
+        const file = it.getAsFile();
+        if (file) { e.preventDefault(); readFile(file); }
+      }
+    }
+  };
+
+  const onScrollMessages = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 100);
+  };
+  const scrollToEnd = () => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
+  const beep = (force = false) => {
+    if (!soundOn && !force) return;
+    try {
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AC();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.type = "sine";
+      o.frequency.value = 740;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+      o.start();
+      o.stop(ctx.currentTime + 0.3);
+      setTimeout(() => ctx.close(), 700);
+    } catch {}
+  };
+
+  const toggleSound = async () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    try {
+      const st = await import("@/lib/store");
+      await st.ready();
+      st.savePrefs({ notifySound: next });
+    } catch {}
+    if (next) beep(true);
+  };
+
+  const stopGeneration = () => {
+    stopRef.current = true;
+    abortRef.current?.abort();
+  };
+
+  const renameSession = async (title: string) => {
+    if (!title) return;
+    try {
+      if (isGuest || guest) {
+        const sessions = loadGuestSessions();
+        const idx = sessions.findIndex((x: any) => x.id === sessionId);
+        if (idx >= 0) {
+          sessions[idx].title = title;
+          saveGuestSession(sessions[idx]);
+        }
+      } else if (supabase && user) {
+        await supabase.from("sessions").update({ title }).eq("id", sessionId);
+      }
+    } catch {}
   };
 
   const copyMsg = (c: string, idx: number) => {
@@ -766,7 +946,9 @@ export default function ChatPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto relative z-10">
+      <div ref={scrollRef} onScroll={onScrollMessages}
+        onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
+        className="flex-1 overflow-y-auto relative z-10">
         <div className="max-w-3xl mx-auto px-4 py-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-up">
@@ -779,7 +961,7 @@ export default function ChatPage() {
               </p>
               <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl w-full">
                 {SUGGESTIONS.map((s, i) => (
-                  <button key={s} onClick={() => setInput(s)}
+                  <button key={s} onClick={() => sendMessage({ prompt: s })}
                     className={`rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] p-3.5 text-left text-[13px] text-slate-400 hover:text-white transition-colors animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
                     {s}
                   </button>
@@ -798,7 +980,8 @@ export default function ChatPage() {
                 }`}>
                   {msg.image && (
                     <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
-                      className="max-w-xs w-full rounded-lg mb-2 border border-white/10 animate-fade-in" />
+                      onClick={() => setLightbox(msg.image!)}
+                      className="max-w-xs w-full rounded-lg mb-2 border border-white/10 animate-fade-in cursor-zoom-in hover:opacity-90 transition-opacity" />
                   )}
                   {msg.role === "assistant" && !!msg.metadata?.reasoning && (
                     <>
@@ -818,10 +1001,23 @@ export default function ChatPage() {
                     </>
                   )}
                   {msg.role === "assistant" ? (
-                    <Markdown content={msg.content} />
+                    <Markdown content={msg.content} onImageClick={setLightbox} />
                   ) : (
                     <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
                   )}
+
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity min-h-[14px]">
+                    {msg.ts ? <span>{new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span> : null}
+                    {msg.role === "assistant" && msg.metadata?.model && (
+                      <span className="truncate max-w-[170px]" title={msg.metadata.model}>· {msg.metadata.model}</span>
+                    )}
+                    {msg.role === "user" && i === lastUserIdx && !sending && !msg.image && (
+                      <button onClick={() => { setEditFrom(i); setInput(String(msg.content)); setTimeout(() => textareaRef.current?.focus(), 30); }}
+                        className="ml-auto hover:text-white transition-colors">
+                        Edit &amp; resend
+                      </button>
+                    )}
+                  </div>
 
                   {msg.role === "assistant" && (
                     <div className="flex items-center gap-1 mt-2 -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -829,6 +1025,12 @@ export default function ChatPage() {
                         className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors" title="Copy">
                         {copiedIdx === i ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                       </button>
+                      {msg.content.startsWith("Error:") && (
+                        <button onClick={regenerate} disabled={sending}
+                          className="px-2 py-1 rounded-md text-[11px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-30">
+                          Retry
+                        </button>
+                      )}
                       <button onClick={regenerate} disabled={sending}
                         className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30" title="Regenerate">
                         <RefreshIcon size={13} />
@@ -920,11 +1122,33 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {!online && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[130] px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[12px] backdrop-blur-xl shadow-lg">
+          You're offline — messages may fail
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setLightbox(null)} role="dialog" aria-label="Image preview">
+          <img src={lightbox} alt="preview" className="max-w-full max-h-full rounded-xl shadow-2xl" />
+          <button onClick={() => setLightbox(null)}
+            className="absolute top-4 right-5 text-slate-400 hover:text-white text-2xl leading-none">×</button>
+        </div>
+      )}
+
       {paletteOpen && <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
 
       {/* Input */}
       <div className="px-4 pt-2 pb-5 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto relative">
+          {!atBottom && messages.length > 0 && (
+            <button onClick={scrollToEnd}
+              className="absolute -top-10 right-1 h-8 px-3 rounded-full bg-[#1a2130]/95 border border-white/10 shadow-xl text-[11.5px] text-slate-300 hover:text-white backdrop-blur flex items-center gap-1.5 z-20 transition-colors">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Latest
+            </button>
+          )}
           {sending && activity && <AgentActivity activity={activity} />}
           {showCmdList && filteredCmds.length > 0 && (
             <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/[0.09] bg-[#141a26] shadow-2xl shadow-black/60 py-1.5 overflow-hidden animate-scale-in z-30">
@@ -943,6 +1167,12 @@ export default function ChatPage() {
               ))}
             </div>
           )}
+          {editFrom != null && (
+            <div className="mb-2 flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-400/30 text-[11.5px] text-amber-200 animate-scale-in">
+              <span>Editing message — your next send replaces the conversation from there</span>
+              <button onClick={() => setEditFrom(null)} className="text-amber-300 hover:text-white shrink-0 transition-colors">Cancel</button>
+            </div>
+          )}
           {attachedImage && (
             <div className="mb-2 relative inline-block animate-scale-in">
               <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-white/10" />
@@ -959,7 +1189,7 @@ export default function ChatPage() {
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
 
             <textarea ref={textareaRef} value={input}
-              onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+              onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste}
               placeholder={`Message ${activeAgentMeta?.name}…`}
               rows={1} disabled={limitReached}
               className="flex-1 bg-transparent resize-none text-sm text-white placeholder-slate-600 focus:outline-none max-h-[200px] py-1.5" />
@@ -971,21 +1201,33 @@ export default function ChatPage() {
               <MicIcon size={18} />
             </button>
 
-            <button onClick={() => sendMessage()}
-              disabled={sending || (!input.trim() && !attachedImage) || limitReached}
+            <button onClick={() => (sending ? stopGeneration() : sendMessage())}
+              disabled={!sending && ((!input.trim() && !attachedImage) || limitReached)}
               className={`p-2.5 rounded-xl transition-colors shrink-0 ${
-                sending || (!input.trim() && !attachedImage) || limitReached
-                  ? "bg-white/[0.06] text-slate-700"
-                  : "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95"
-              }`} title="Send (Enter)">
-              <SendIcon size={17} />
+                sending
+                  ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 active:scale-95"
+                  : (!input.trim() && !attachedImage) || limitReached
+                    ? "bg-white/[0.06] text-slate-700"
+                    : "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95"
+              }`} title={sending ? "Stop generating" : "Send (Enter)"}>
+              {sending ? (
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor"><rect x="3" y="3" width="9" height="9" rx="1.5"/></svg>
+              ) : (
+                <SendIcon size={17} />
+              )}
             </button>
           </div>
 
           <div className="flex items-center justify-between mt-2 px-1">
-            <div className="text-[10px] text-slate-700">
+            <div className="flex items-center gap-3 text-[10px] text-slate-700">
               {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
                 <>Enter send · / commands · ⌘K palette{voiceSupported && " · voice"}</>}
+              {input.length > 0 && <span className="tabular-nums">{input.length.toLocaleString()} chars</span>}
+              <button onClick={toggleSound}
+                className={`transition-colors ${soundOn ? "text-emerald-500" : "hover:text-white"}`}
+                title="Toggle completion sound">
+                Sound {soundOn ? "on" : "off"}
+              </button>
             </div>
             <div className="text-[10px] text-slate-700">Founda</div>
           </div>

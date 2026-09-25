@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { AuthShell, AuthTabs, AuthField } from "@/components/auth-shell";
+import { MailIcon, LockIcon } from "@/components/icons";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, continueAsGuest, user, guest, loading: authLoading } = useAuth();
+  const { login, continueAsGuest, user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -17,7 +19,7 @@ export default function LoginPage() {
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (mounted && !authLoading && user) router.replace(`/sessions/${crypto.randomUUID()}`);
-  }, [mounted, authLoading, user, guest]);
+  }, [mounted, authLoading, user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,88 +37,88 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="w-full max-w-sm relative z-10 animate-scale-in">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <span className="font-semibold text-lg gradient-text tracking-tight">Founda</span>
-            <span className="text-sm text-slate-600">CRM</span>
-          </Link>
-          <h1 className="font-display text-2xl font-semibold mb-1.5 text-white">Welcome back</h1>
-          <p className="text-slate-500 text-sm">Sign in to your persistent AI workspace</p>
+    <AuthShell title="Welcome back" subtitle="Sign in to your persistent AI workspace">
+      <AuthTabs active="login" />
+
+      <form onSubmit={handleLogin} className="space-y-3">
+        <div className="animate-fade-up stagger-1">
+          <AuthField
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="you@example.com"
+            autoComplete="email"
+            icon={<MailIcon size={15} />}
+          />
+        </div>
+        <div className="animate-fade-up stagger-2">
+          <AuthField
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="Your password"
+            autoComplete="current-password"
+            icon={<LockIcon size={15} />}
+          />
         </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl shadow-2xl shadow-emerald-950/50">
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="animate-fade-up stagger-1">
-              <label className="block text-[13px] text-slate-400 mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-slate-600 text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-            <div className="animate-fade-up stagger-2">
-              <label className="block text-[13px] text-slate-400 mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="glass-input w-full px-3.5 py-2.5 rounded-xl text-white placeholder-slate-600 text-sm"
-                placeholder="Your password"
-              />
-            </div>
-
-            {error && (
-              <div className="text-red-400 text-[13px] bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5 animate-fade-in">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="glass-btn-primary w-full py-2.5 rounded-xl text-sm animate-fade-up stagger-3"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in…
-                </span>
-              ) : (
-                "Sign in"
-              )}
-            </button>
-          </form>
-
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-white/[0.08]" />
-            <span className="text-[11px] text-slate-600">or</span>
-            <div className="flex-1 h-px bg-white/[0.08]" />
-          </div>
-
-          <button onClick={handleGuest}
-            className="w-full py-2.5 rounded-xl text-sm text-slate-400 hover:text-white border border-white/10 hover:bg-emerald-500/[0.1] hover:border-emerald-400/40 transition-all animate-fade-up stagger-4">
-            Continue as guest
+        <div className="flex justify-end">
+          <button type="button" className="text-[12px] text-slate-600 hover:text-emerald-300 transition-colors">
+            Forgot password?
           </button>
-          <p className="text-[11px] text-slate-700 text-center mt-2.5">
-            Guest mode: no account needed, but chats are not saved permanently.
-          </p>
         </div>
 
-        <p className="text-center text-[13px] text-slate-500 mt-5 animate-fade-up stagger-5">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-emerald-300 hover:text-emerald-200 font-medium">
-            Create one free
-          </Link>
-        </p>
+        {error && (
+          <div className="text-red-400 text-[13px] bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5 animate-fade-in">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="glass-btn-primary w-full py-3 rounded-xl text-sm font-medium animate-fade-up stagger-3 group flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Signing in…
+            </span>
+          ) : (
+            <>
+              Sign in
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="transition-transform group-hover:translate-x-0.5">
+                <path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </>
+          )}
+        </button>
+      </form>
+
+      <div className="flex items-center gap-3 my-5">
+        <div className="flex-1 h-px bg-white/[0.08]" />
+        <span className="text-[11px] text-slate-600">or</span>
+        <div className="flex-1 h-px bg-white/[0.08]" />
       </div>
-    </div>
+
+      <button
+        onClick={handleGuest}
+        className="w-full py-3 rounded-xl text-sm text-slate-400 hover:text-white border border-white/10 hover:bg-white/[0.05] hover:border-white/25 transition-all animate-fade-up stagger-4"
+      >
+        Continue as guest
+      </button>
+      <p className="text-[11px] text-slate-700 text-center mt-3 leading-relaxed">
+        Guest chats stay on this device and are not saved permanently.
+      </p>
+
+      <p className="text-center text-[13px] text-slate-500 mt-6 animate-fade-up stagger-5">
+        New here?{" "}
+        <Link href="/register" className="text-emerald-300 hover:text-emerald-200 font-medium">
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

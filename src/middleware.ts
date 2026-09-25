@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  // Published sites (/p/*) are standalone — skip auth cookie refresh entirely.
+  if (request.nextUrl.pathname.startsWith("/p/")) return NextResponse.next();
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
