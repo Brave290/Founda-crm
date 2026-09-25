@@ -306,6 +306,35 @@ export async function upgradeOpencode(): Promise<{ success: boolean; message: st
 
 // --- Server Lifecycle ---
 
+// Out-of-the-box config: keyless free provider (Pollinations) as default so
+// the engine answers without any API keys. User keys (Groq/OpenRouter/...)
+// can be layered on later via client.auth.set + model picker.
+function engineConfig() {
+  const permission = { edit: "allow" as const, bash: "allow" as const, webfetch: "allow" as const };
+  return {
+    $schema: "https://opencode.ai/config.json",
+    model: process.env.OPENCODE_DEFAULT_MODEL || "pollinations/openai",
+    provider: {
+      pollinations: {
+        npm: "@ai-sdk/openai-compatible",
+        name: "Pollinations (free, keyless)",
+        options: {
+          baseURL: "https://text.pollinations.ai/openai",
+          apiKey: process.env.POLLINATIONS_API_KEY || "founda-free",
+        },
+        models: {
+          "openai": { name: "GPT-4.1 mini - free" },
+          "openai-large": { name: "GPT-4.1 - free" },
+          "mistral": { name: "Mistral - free" },
+          "deepseek-reasoning": { name: "DeepSeek Reasoning - free" },
+          "qwen-coder": { name: "Qwen Coder - free" },
+        },
+      },
+    },
+    permission,
+  };
+}
+
 export async function ensureServer(): Promise<OpencodeClient> {
   ensureRuntimeEnv();
   void maybeAutoUpdate(); // background, at most one check per 24h per instance
@@ -336,7 +365,7 @@ export async function ensureServer(): Promise<OpencodeClient> {
   }
 
   const result = await createOpencode({
-    config: {} as any,
+    config: engineConfig() as any,
     timeout: 60_000, // cold-start spawn of a 180MB binary can exceed 5s
   });
 
