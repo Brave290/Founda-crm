@@ -59,6 +59,9 @@ export function resolveModels(
   });
 }
 
+/** App default: the latest free MiMo. */
+export const DEFAULT_MODEL = "opencode/mimo-v2.6-flash-free";
+
 /** Failover chain: requested model first, then every other available model. */
 export function buildModelChain(
   requested: string | undefined,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureServer, setProviderAuth, listNativeModels } from "@/lib/opencode";
-import { buildModelChain, keyForModel } from "@/lib/models";
+import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreForRequest } from "@/lib/store-server";
 import { stepFromPart } from "@/lib/agent-activity";
 
@@ -52,7 +52,8 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
   const chain: string[] = [];
-  for (const id of [model || "", ...nativeFree, ...staticChain]) {
+  // Latest MiMo is the app default when the user hasn't picked a model.
+  for (const id of [model || "", model ? "" : DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -236,6 +237,8 @@ function streamRun(prep: Prep): Response {
 
       const steps = new Map<string, any>();
       const textParts = new Map<string, string>();
+      const reasonParts = new Map<string, string>();
+      const partKinds = new Map<string, "text" | "reasoning">();
       const assistantIds = new Set<string>();
       let todos: any[] = [];
       let busy = false;
@@ -243,6 +246,8 @@ function streamRun(prep: Prep): Response {
       let activityDirty = false;
       let textTimer: ReturnType<typeof setTimeout> | null = null;
       let textDirty = false;
+      let reasonTimer: ReturnType<typeof setTimeout> | null = null;
+      let reasonDirty = false;
 
       const flushActivity = () => {
         activityDirty = false;
@@ -266,14 +271,25 @@ function streamRun(prep: Prep): Response {
         textDirty = true;
         if (!textTimer) textTimer = setTimeout(() => { textTimer = null; if (textDirty) flushText(); }, 100);
       };
+      const flushReason = () => {
+        if (!reasonDirty) return;
+        reasonDirty = false;
+        send("reason", { text: [...reasonParts.values()].join("") });
+      };
+      const markReason = () => {
+        reasonDirty = true;
+        if (!reasonTimer) reasonTimer = setTimeout(() => { reasonTimer = null; if (reasonDirty) flushReason(); }, 250);
+      };
 
       // Failover/recovery restarts: drop partial state from the failed attempt.
       prep.onAttempt = () => {
         steps.clear();
         textParts.clear();
+        reasonParts.clear();
         busy = true;
         markActivity();
         markText();
+        markReason();
       };
 
       const handle = (ev: any) => {
@@ -297,15 +313,27 @@ function streamRun(prep: Prep): Response {
           const info = props.info;
           if (info?.id && info?.role === "assistant") assistantIds.add(info.id);
         } else if (type === "message.part.delta") {
-          // incremental text (legacy stream)
+          // incremental text/reasoning (legacy stream)
           if (
             typeof props.delta === "string" && props.delta &&
-            (!props.field || props.field === "text") &&
+            (!props.field || props.field === "text" || props.field === "reasoning") &&
             props.messageID && assistantIds.has(props.messageID)
           ) {
             const key = props.partID || props.messageID;
-            textParts.set(key, (textParts.get(key) || "") + props.delta);
-            markText();
+            const kind = props.field === "reasoning" ? "reasoning" : partKinds.get(key) || "text";
+            if (kind === "reasoning") {
+              reasonParts.set(key, (reasonParts.get(key) || "") + props.delta);
+              markReason();
+            } else {
+              textParts.set(key, (textParts.get(key) || "") + props.delta);
+              markText();
+            }
+          }
+        } else if (type === "session.next.reasoning.delta") {
+          if (typeof props.delta === "string" && props.delta && props.sessionID) {
+            const key = props.textID || props.assistantMessageID || "next-reason";
+            reasonParts.set(key, (reasonParts.get(key) || "") + props.delta);
+            markReason();
           }
         } else if (type === "session.next.text.delta") {
           if (typeof props.delta === "string" && props.delta && props.sessionID) {
@@ -317,12 +345,22 @@ function streamRun(prep: Prep): Response {
           const part = props.part;
           if (!part) return;
           if (part.type === "text" && !part.synthetic && typeof part.text === "string" && part.text && part.messageID) {
+            partKinds.set(part.id, "text");
             if (assistantIds.has(part.messageID)) {
               // authoritative accumulated text; never regress a longer value
               const cur = textParts.get(part.id) || "";
               if (part.text.length >= cur.length) {
                 textParts.set(part.id, part.text);
                 markText();
+              }
+            }
+          } else if (part.type === "reasoning" && typeof part.text === "string" && part.text && part.messageID) {
+            partKinds.set(part.id, "reasoning");
+            if (assistantIds.has(part.messageID)) {
+              const cur = reasonParts.get(part.id) || "";
+              if (part.text.length >= cur.length) {
+                reasonParts.set(part.id, part.text);
+                markReason();
               }
             }
           } else if (part.type === "tool") {
@@ -360,6 +398,7 @@ function streamRun(prep: Prep): Response {
           // prompt() resolves — capture them before declaring completion.
           await new Promise((r) => setTimeout(r, 300));
           flushText();
+          flushReason();
           if (activityDirty) flushActivity();
           send("done", {
             content: out.content,
@@ -378,6 +417,7 @@ function streamRun(prep: Prep): Response {
         } finally {
           if (activityTimer) clearTimeout(activityTimer);
           if (textTimer) clearTimeout(textTimer);
+          if (reasonTimer) clearTimeout(reasonTimer);
           close();
         }
       })();

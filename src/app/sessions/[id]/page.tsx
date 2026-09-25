@@ -77,6 +77,10 @@ export default function ChatPage() {
   const [ocSessionId, setOcSessionId] = useState<string | null>(null);
   const [activity, setActivity] = useState<AgentActivityData | null>(null);
   const [streamText, setStreamText] = useState("");
+  const [streamReason, setStreamReason] = useState("");
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [thoughtMs, setThoughtMs] = useState(0);
+  const [expandedReason, setExpandedReason] = useState<number | null>(null);
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
@@ -403,6 +407,20 @@ export default function ChatPage() {
     setAttachedImage(null);
     setSending(true);
     setActivity(null);
+    setStreamReason("");
+    setReasonOpen(false);
+    setThoughtMs(0);
+    const thinkStart = Date.now();
+    let reasonText = "";
+    let reasonAutoOpened = false;
+    let answerCollapsed = false;
+    const collapseReason = () => {
+      if (reasonText && !answerCollapsed) {
+        answerCollapsed = true;
+        setReasonOpen(false);
+        setThoughtMs(Date.now() - thinkStart);
+      }
+    };
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     saveMessages(updated).catch(() => {});
@@ -436,14 +454,26 @@ export default function ChatPage() {
         const handleEvent = (name: string, data: any) => {
           if (name === "activity") {
             if (Array.isArray(data.steps)) setActivity(data as AgentActivityData);
+          } else if (name === "reason") {
+            reasonText = typeof data.text === "string" ? data.text : "";
+            setStreamReason(reasonText);
+            if (reasonText && !reasonAutoOpened) {
+              reasonAutoOpened = true;
+              setReasonOpen(true);
+            }
           } else if (name === "delta") {
             content = typeof data.text === "string" ? data.text : content;
             setStreamText(content);
+            if (content && reasonText) collapseReason();
           } else if (name === "done") {
             done = true;
             if (typeof data.content === "string" && data.content) content = data.content;
             if (data.sessionId) setOcSessionId(data.sessionId);
             metadata = data.metadata;
+            collapseReason();
+            if (reasonText) {
+              metadata = { ...(metadata || {}), reasoning: reasonText, thoughtMs: Date.now() - thinkStart };
+            }
           } else if (name === "error") {
             streamErr = data.error || "stream error";
           }
@@ -497,6 +527,7 @@ export default function ChatPage() {
     } finally {
       setSending(false);
       setStreamText("");
+      setStreamReason("");
       setActivity(null);
     }
   };
@@ -762,12 +793,29 @@ export default function ChatPage() {
               <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[88%] ${
                   msg.role === "user"
-                    ? "rounded-3xl bg-[#1a2130] px-4 py-2.5 text-[14px] text-slate-100"
+                    ? "rounded-3xl bg-[#1a2130] px-4 py-2.5 text-[14px] text-slate-100 leading-[1.5]"
                     : "w-full"
                 }`}>
                   {msg.image && (
                     <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
                       className="max-w-xs w-full rounded-lg mb-2 border border-white/10 animate-fade-in" />
+                  )}
+                  {msg.role === "assistant" && !!msg.metadata?.reasoning && (
+                    <>
+                      <button onClick={() => setExpandedReason(expandedReason === i ? null : i)}
+                        className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-300 mb-1.5 transition-colors">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                          className={`transition-transform ${expandedReason === i ? "rotate-90" : ""}`}>
+                          <path d="M3 2l4 3-4 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Thought for {(((msg.metadata.thoughtMs || 0) / 1000) || 1).toFixed(1)}s
+                      </button>
+                      {expandedReason === i && (
+                        <div className="mb-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 max-h-56 overflow-y-auto">
+                          <div className="text-[12.5px] text-slate-500 whitespace-pre-wrap leading-[1.5]">{msg.metadata.reasoning}</div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {msg.role === "assistant" ? (
                     <Markdown content={msg.content} />
@@ -796,6 +844,58 @@ export default function ChatPage() {
             </div>
           ))}
 
+          {sending && streamReason && (
+            <div className="mb-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] overflow-hidden animate-message-in">
+              <button onClick={() => setReasonOpen((o) => !o)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.03] transition-colors">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                  className={`text-slate-500 transition-transform ${reasonOpen ? "rotate-90" : ""}`}>
+                  <path d="M3 2l4 3-4 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {reasonOpen ? (
+                  <span className="flex items-center gap-2">
+                    <span className="flex gap-1 items-center">
+                      <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                      <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                      <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                    </span>
+                    <span className="text-[12.5px] text-slate-400">Thinking…</span>
+                  </span>
+                ) : (
+                  <span className="text-[12.5px] text-slate-500">Thought for {((thoughtMs || 1000) / 1000).toFixed(1)}s</span>
+                )}
+              </button>
+              {reasonOpen && (
+                <div className="px-4 pb-3 max-h-52 overflow-y-auto">
+                  <div className="text-[12.5px] text-slate-500 whitespace-pre-wrap leading-[1.5]">{streamReason}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {sending && activity && activity.steps.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {activity.steps.slice(-3).map((s) => {
+                const isCmd = /bash|shell|execute|command/i.test(s.tool);
+                return (
+                  <div key={s.id} className="rounded-xl border border-white/[0.07] bg-black/45 overflow-hidden animate-message-in">
+                    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.05]">
+                      {s.status === "running" ? (
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      ) : s.status === "error" ? (
+                        <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      )}
+                      <span className="text-[11px] text-slate-400 truncate">{s.title}</span>
+                    </div>
+                    <pre className="px-3 py-2 text-[11.5px] font-mono text-slate-300 whitespace-pre-wrap break-all max-h-36 overflow-y-auto leading-[1.5]">{isCmd && s.detail ? `$ ${s.detail}\n` : s.detail ? `${s.detail}\n` : ""}{s.output || (s.status === "running" ? "…" : "")}</pre>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {sending && streamText && (
             <div className="mb-6 animate-message-in">
               <div className="flex justify-start">
@@ -806,7 +906,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {sending && !streamText && (
+          {sending && !streamText && !streamReason && (
             <div className="mb-6 flex items-center gap-2.5 animate-message-in">
               <span className="flex gap-1 items-center">
                 <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
@@ -823,7 +923,7 @@ export default function ChatPage() {
       {paletteOpen && <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
 
       {/* Input */}
-      <div className="border-t border-white/[0.06] px-4 py-3 shrink-0 relative z-10">
+      <div className="px-4 pt-2 pb-5 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto relative">
           {sending && activity && <AgentActivity activity={activity} />}
           {showCmdList && filteredCmds.length > 0 && (
@@ -851,7 +951,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div className="flex items-end gap-2 rounded-2xl px-3 py-2.5 bg-[#141b2a] border border-white/[0.09] focus-within:border-white/25 transition-colors">
+          <div className="flex items-end gap-2 rounded-2xl px-3 py-2.5 bg-[#141b2a]/90 backdrop-blur-xl border border-white/[0.09] focus-within:border-white/25 shadow-[0_16px_50px_-12px_rgba(0,0,0,0.7)] transition-colors">
             <button onClick={() => fileInputRef.current?.click()}
               className="p-2 rounded-lg text-slate-500 hover:text-amber-300 transition-colors shrink-0" title="Upload image">
               <ImageIcon size={18} />

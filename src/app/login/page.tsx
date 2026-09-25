@@ -16,7 +16,7 @@ export default function LoginPage() {
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (mounted && !authLoading && (user || guest)) router.replace(`/sessions/${crypto.randomUUID()}`);
+    if (mounted && !authLoading && user) router.replace(`/sessions/${crypto.randomUUID()}`);
   }, [mounted, authLoading, user, guest]);
 
   const handleLogin = async (e: React.FormEvent) => {

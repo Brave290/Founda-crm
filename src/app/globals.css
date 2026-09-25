@@ -22,9 +22,9 @@
   --grad-gold: linear-gradient(92deg, #f2e2a6 0%, #d4af37 55%, #b8912f 100%);
 }
 
-/* 90% base scale — denser, professional typography */
+/* 87.5% base scale — denser, professional typography */
 html {
-  font-size: 90%;
+  font-size: 87.5%;
   scroll-behavior: smooth;
 }
 

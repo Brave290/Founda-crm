@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { UsagePanel, useToast } from "@/components/UsagePanel";
 import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon } from "@/components/icons";
+import { DEFAULT_MODEL } from "@/lib/models";
 
 type Tab = "account" | "model" | "usage" | "schedule" | "data";
 
@@ -86,7 +87,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     import("@/lib/store")
       .then(async (st) => {
         await st.ready();
-        setModel(st.getPrefs().model || "");
+        setModel(st.getPrefs().model || DEFAULT_MODEL);
         setDisplayName(st.getPrefs().displayName || "");
       })
       .catch(() => {});
