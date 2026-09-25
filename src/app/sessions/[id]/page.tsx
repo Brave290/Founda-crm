@@ -76,6 +76,7 @@ export default function ChatPage() {
   const [model, setModel] = useState<string>("");
   const [ocSessionId, setOcSessionId] = useState<string | null>(null);
   const [activity, setActivity] = useState<AgentActivityData | null>(null);
+  const [streamText, setStreamText] = useState("");
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelList, setModelList] = useState<any[]>([]);
@@ -165,7 +166,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamText]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -407,45 +408,80 @@ export default function ChatPage() {
     saveMessages(updated).catch(() => {});
 
     try {
-      // Pre-create the engine session so live activity (todos/tools) can stream in
-      // while the prompt is still running.
-      let targetOc = ocSessionId;
-      let preCreated = false;
-      if (!targetOc) {
-        try {
-          const cr = await fetch("/api/agent/create", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: (opts?.label || body).slice(0, 60), agent: activeAgent }),
-          });
-          const cd = await cr.json();
-          if (cd.sessionId) {
-            targetOc = cd.sessionId;
-            preCreated = true;
-            setOcSessionId(cd.sessionId);
-          }
-        } catch {}
-      }
-
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: targetOc || sessionId,
+          sessionId: ocSessionId || sessionId,
           prompt: overridePrompt || userMsg.content,
           history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
           agent: activeAgent,
+          stream: true,
           ...(model ? { model } : {}),
           ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
           ...(bodyImage ? { image: bodyImage } : {}),
-          ...(preCreated ? { replay: messages.length > 0 } : {}),
         }),
       });
-      const data = await res.json();
-      if (data.sessionId) setOcSessionId(data.sessionId);
-      const reply: Message = data.error
-        ? { role: "assistant", content: `Error: ${data.error}` }
-        : { role: "assistant", content: data.content || "(empty response)", metadata: data.metadata };
+
+      const contentType = res.headers.get("content-type") || "";
+      let content = "";
+      let metadata: any;
+      let streamErr: string | null = null;
+      let done = false;
+
+      if (res.ok && contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        const handleEvent = (name: string, data: any) => {
+          if (name === "activity") {
+            if (Array.isArray(data.steps)) setActivity(data as AgentActivityData);
+          } else if (name === "delta") {
+            content = typeof data.text === "string" ? data.text : content;
+            setStreamText(content);
+          } else if (name === "done") {
+            done = true;
+            if (typeof data.content === "string" && data.content) content = data.content;
+            if (data.sessionId) setOcSessionId(data.sessionId);
+            metadata = data.metadata;
+          } else if (name === "error") {
+            streamErr = data.error || "stream error";
+          }
+        };
+        while (true) {
+          const { done: readDone, value } = await reader.read();
+          if (readDone) break;
+          buf += decoder.decode(value, { stream: true });
+          let sep: number;
+          while ((sep = buf.indexOf("\n\n")) !== -1) {
+            const chunk = buf.slice(0, sep);
+            buf = buf.slice(sep + 2);
+            let evName = "";
+            let dataStr = "";
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("event: ")) evName = line.slice(7);
+              else if (line.startsWith("data: ")) dataStr += line.slice(6);
+            }
+            if (evName && dataStr) {
+              try { handleEvent(evName, JSON.parse(dataStr)); } catch {}
+            }
+          }
+        }
+        if (!done && !streamErr && !content) streamErr = "Connection ended unexpectedly";
+      } else {
+        // Non-stream fallback: plain JSON (error or legacy path)
+        const data = await res.json().catch(() => ({} as any));
+        if (data.error) streamErr = data.error;
+        else {
+          content = data.content || "";
+          if (data.sessionId) setOcSessionId(data.sessionId);
+          metadata = data.metadata;
+        }
+      }
+
+      const reply: Message = streamErr
+        ? { role: "assistant", content: `Error: ${streamErr}` }
+        : { role: "assistant", content: content || "(empty response)", metadata };
 
       const withReply = [...updated, reply];
       setMessages(withReply);
@@ -460,28 +496,10 @@ export default function ChatPage() {
       saveMessages(withErr).catch(() => {});
     } finally {
       setSending(false);
+      setStreamText("");
+      setActivity(null);
     }
   };
-
-  // Manus-style live activity: poll tool/todo state while a prompt is running.
-  useEffect(() => {
-    if (!sending || !ocSessionId) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = async () => {
-      if (cancelled) return;
-      try {
-        const r = await fetch(`/api/agent/activity?session=${ocSessionId}`);
-        if (r.ok) {
-          const d = await r.json();
-          if (!cancelled && Array.isArray(d.steps)) setActivity(d as AgentActivityData);
-        }
-      } catch {}
-      if (!cancelled) timer = setTimeout(tick, 1000);
-    };
-    timer = setTimeout(tick, 600);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [sending, ocSessionId]);
 
   const toggleVoice = () => {
     if (!voiceSupported) { toast("Voice not supported in this browser", "error"); return; }
@@ -778,7 +796,17 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {sending && (
+          {sending && streamText && (
+            <div className="mb-6 animate-message-in">
+              <div className="flex justify-start">
+                <div className="w-full max-w-[88%]">
+                  <Markdown content={streamText} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sending && !streamText && (
             <div className="mb-6 flex items-center gap-2.5 animate-message-in">
               <span className="flex gap-1 items-center">
                 <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
