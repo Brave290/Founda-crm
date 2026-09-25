@@ -7,10 +7,19 @@ import { UsagePanel, useToast } from "@/components/UsagePanel";
 import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon } from "@/components/icons";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { fetchJSON } from "@/lib/net";
+import { SKILLS, SKILL_CATEGORIES, type SkillCategory } from "@/lib/skills";
 
-type Tab = "account" | "model" | "usage" | "schedule" | "data";
+type Tab = "account" | "model" | "usage" | "skills" | "schedule" | "data";
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsModal({
+  open,
+  onClose,
+  initialTab,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialTab?: string;
+}) {
   const router = useRouter();
   const { user, guest, logout } = useAuth();
   const [tab, setTab] = useState<Tab>("account");
@@ -25,6 +34,12 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   const [tEmail, setTEmail] = useState("");
   const [smtp, setSmtp] = useState({ host: "smtp.gmail.com", port: "587", user: "", pass: "" });
   const [busyT, setBusyT] = useState(false);
+  const [skillSel, setSkillSel] = useState<Set<string>>(new Set());
+  const [skillQuery, setSkillQuery] = useState("");
+  const [skillCat, setSkillCat] = useState<"All" | SkillCategory>("All");
+  const [customSkills, setCustomSkills] = useState<any[]>([]);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
   const { toast, Toaster } = useToast();
 
   const headers = async () => {
@@ -92,8 +107,78 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   }, [open]);
 
   useEffect(() => {
+    if (open) setTab(((initialTab as Tab) || "account"));
+  }, [open, initialTab]);
+
+  useEffect(() => {
     if (open && tab === "schedule") loadTasks();
   }, [open, tab]);
+
+  useEffect(() => {
+    if (open && tab !== "skills") return;
+    if (!open) return;
+    import("@/lib/store")
+      .then(async (st) => {
+        await st.ready();
+        const p = st.getPrefs();
+        const sel = Array.isArray(p.skills) ? p.skills.map(String) : SKILLS.map((x) => x.id);
+        setSkillSel(new Set(sel));
+        setCustomSkills(Array.isArray(p.customSkills) ? p.customSkills : []);
+      })
+      .catch(() => {});
+  }, [open, tab]);
+
+  const persistSkills = (next: Set<string>) => {
+    setSkillSel(new Set(next));
+    import("@/lib/store")
+      .then((st) => st.savePrefs({ skills: [...next] }))
+      .catch(() => {});
+  };
+
+  const toggleSkill = (id: string) => {
+    const next = new Set(skillSel);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    persistSkills(next);
+  };
+
+  const importSkill = async () => {
+    const url = importUrl.trim();
+    if (!/^https?:\/\//.test(url)) {
+      toast("Paste a raw .md / SKILL.md URL", "error");
+      return;
+    }
+    setImporting(true);
+    try {
+      const d = await fetchJSON("/api/skill/fetch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, max: 40_000 }) }, { timeoutMs: 20_000, retries: 1 });
+      const md = String(d.text || "");
+      if (md.length < 40) throw new Error("too short to be a skill");
+      const title = (/^#\s+(.+)$/m.exec(md)?.[1] || /name\s*:\s*(.+)/i.exec(md)?.[1] || url.split("/").pop() || "Imported skill").trim();
+      const desc = md
+        .replace(/^---[\s\S]*?---/, "")
+        .split("\n\n")
+        .map((p: string) => p.trim())
+        .filter((p: string) => p && !p.startsWith("#") && !p.startsWith("```"))
+        .join(" ")
+        .slice(0, 180);
+      const entry = { id: `url:${url}`, name: title.slice(0, 80), description: desc, instructions: md.slice(0, 40_000) };
+      const next = [...customSkills.filter((c) => c.id !== entry.id), entry];
+      setCustomSkills(next);
+      import("@/lib/store").then((st) => st.savePrefs({ customSkills: next })).catch(() => {});
+      setImportUrl("");
+      toast(`Imported "${entry.name}"`, "success");
+    } catch (e: any) {
+      toast(e?.message || "Import failed", "error");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const removeCustomSkill = (id: string) => {
+    const next = customSkills.filter((c) => c.id !== id);
+    setCustomSkills(next);
+    import("@/lib/store").then((st) => st.savePrefs({ customSkills: next })).catch(() => {});
+  };
 
   if (!open) return null;
 
@@ -140,6 +225,15 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     { id: "account", label: "Account", icon: <UserIcon size={14} /> },
     { id: "model", label: "Model", icon: <LayersIcon size={14} /> },
     { id: "usage", label: "Usage", icon: <BarChartIcon size={14} /> },
+    {
+      id: "skills",
+      label: "Skills",
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 3.5a1.5 1.5 0 013 0V5h4a1 1 0 011 1v4h1.5a1.5 1.5 0 010 3H18v4a1 1 0 01-1 1h-4v-1.5a1.5 1.5 0 00-3 0V18H6a1 1 0 01-1-1v-4H3.5a1.5 1.5 0 010-3H5V6a1 1 0 011-1h4V3.5z" />
+        </svg>
+      ),
+    },
     { id: "schedule", label: "Schedule", icon: <ClockIcon size={14} /> },
     { id: "data", label: "Data", icon: <TrashIcon size={14} /> },
   ];
@@ -424,6 +518,151 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {tab === "skills" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+                    </svg>
+                    <input
+                      value={skillQuery}
+                      onChange={(e) => setSkillQuery(e.target.value)}
+                      placeholder="Search skills — image, video, search, chart, tweet…"
+                      className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[13px] text-white placeholder-slate-600 focus:outline-none focus:border-white/20 transition-colors"
+                    />
+                  </div>
+                  <button
+                    onClick={() => persistSkills(new Set(SKILLS.map((x) => x.id)))}
+                    className="px-3 py-2 rounded-lg text-[12px] text-emerald-300 border border-emerald-400/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    Enable all {SKILLS.length}
+                  </button>
+                  <button
+                    onClick={() => persistSkills(new Set())}
+                    className="px-3 py-2 rounded-lg text-[12px] text-slate-400 border border-white/10 hover:bg-white/[0.06] transition-colors"
+                  >
+                    Disable all
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {(["All", ...SKILL_CATEGORIES] as const).map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setSkillCat(c as any)}
+                      className={`px-2.5 py-1 rounded-full text-[11.5px] transition-colors ${
+                        skillCat === c
+                          ? "bg-white/[0.1] text-white border border-white/20"
+                          : "text-slate-500 border border-white/[0.07] hover:text-slate-300"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-[11.5px] text-slate-600">
+                  {skillSel.size} of {SKILLS.length} built-in skills active
+                  {customSkills.length > 0 && ` · ${customSkills.length} imported`}
+                  {" — active skills are injected into every chat so the AI uses them automatically."}
+                </div>
+
+                {customSkills.map((c) => (
+                  <div
+                    key={c.id}
+                    className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-3.5 py-2.5 flex items-start gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] text-amber-100 font-medium truncate">{c.name}</div>
+                      <div className="text-[11.5px] text-amber-200/60 truncate">{c.description || c.id}</div>
+                    </div>
+                    <button
+                      onClick={() => removeCustomSkill(c.id)}
+                      className="text-[11.5px] text-red-300 hover:text-red-200 transition-colors shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                <div className="flex gap-2">
+                  <input
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && importSkill()}
+                    placeholder="Import skill from URL — raw GitHub SKILL.md or any .md"
+                    className="flex-1 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[12.5px] text-white placeholder-slate-600 focus:outline-none focus:border-white/20 transition-colors"
+                  />
+                  <button
+                    onClick={importSkill}
+                    disabled={importing}
+                    className="px-3.5 py-2 rounded-lg text-[12.5px] font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 transition-colors"
+                  >
+                    {importing ? "Importing…" : "Import"}
+                  </button>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {SKILLS.filter((k) => {
+                    if (skillCat !== "All" && k.category !== skillCat) return false;
+                    const q = skillQuery.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      k.name.toLowerCase().includes(q) ||
+                      k.description.toLowerCase().includes(q) ||
+                      k.id.includes(q) ||
+                      k.category.toLowerCase().includes(q) ||
+                      k.triggers.some((t) => t.toLowerCase().includes(q))
+                    );
+                  }).map((k) => {
+                    const on = skillSel.has(k.id);
+                    return (
+                      <button
+                        key={k.id}
+                        onClick={() => toggleSkill(k.id)}
+                        className={`text-left rounded-xl border px-3.5 py-3 transition-all ${
+                          on
+                            ? "border-emerald-400/35 bg-emerald-500/[0.07]"
+                            : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[13px] font-medium ${on ? "text-white" : "text-slate-400"}`}>
+                            {k.name}
+                          </span>
+                          <span
+                            className={`h-4 w-7 rounded-full p-0.5 transition-colors shrink-0 ${
+                              on ? "bg-emerald-500" : "bg-white/10"
+                            }`}
+                          >
+                            <span
+                              className={`block h-3 w-3 rounded-full bg-white transition-transform ${
+                                on ? "translate-x-3" : ""
+                              }`}
+                            />
+                          </span>
+                        </div>
+                        <div className="text-[11.5px] text-slate-600 mt-0.5 line-clamp-2 leading-snug">
+                          {k.description}
+                        </div>
+                        <div className="text-[10px] text-slate-700 mt-1">{k.category}</div>
+                      </button>
+                    );
+                  })}
+                  {SKILLS.filter((k) => {
+                    if (skillCat !== "All" && k.category !== skillCat) return false;
+                    const q = skillQuery.toLowerCase().trim();
+                    return !q || k.name.toLowerCase().includes(q) || k.description.toLowerCase().includes(q) || k.id.includes(q) || k.category.toLowerCase().includes(q) || k.triggers.some((t) => t.toLowerCase().includes(q));
+                  }).length === 0 && (
+                    <div className="col-span-full text-center py-6 text-[12.5px] text-slate-600">
+                      No skills match "{skillQuery}" — try the web-search skill, or import one from a URL above.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

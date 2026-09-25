@@ -60,6 +60,7 @@ export default function ChatPage() {
   const sessionId = params.id as string;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<string | undefined>();
   const isGuest = searchParams.get("guest") === "1";
 
   const { user, guest, loading: authLoading } = useAuth();
@@ -811,13 +812,14 @@ export default function ChatPage() {
     { id: "help", group: "Navigation", label: "Show commands help", hint: "/help", icon: <ClipboardIcon size={14} />, run: () => runSlash("/help", "") },
     { id: "dashboard", group: "Navigation", label: "Go to dashboard", hint: "sessions & settings", icon: <LayersIcon size={14} />, run: () => router.push("/dashboard") },
     { id: "usage", group: "Navigation", label: "Toggle usage panel", hint: "limits & quota", icon: <BarChartIcon size={14} />, run: () => setShowUsage((v) => !v) },
+    { id: "skills", group: "Navigation", label: "Browse plugin skills", hint: "image · video · search · more", icon: <LayersIcon size={14} />, run: () => { setSettingsTab("skills"); setSettingsOpen(true); } },
   ];
 
   return (
     <div className="h-screen flex bg-[#0b0f17]">
       <Toaster />
-      <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} currentId={sessionId} onOpenSettings={() => setSettingsOpen(true)} />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} currentId={sessionId} onOpenSettings={() => { setSettingsTab(undefined); setSettingsOpen(true); }} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} initialTab={settingsTab} />
 
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden bg-[#0b0f17]">
       {/* Header */}

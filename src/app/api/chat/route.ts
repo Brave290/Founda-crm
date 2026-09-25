@@ -3,6 +3,7 @@ import { ensureServer, setProviderAuth, listNativeModels } from "@/lib/opencode"
 import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreForRequest } from "@/lib/store-server";
 import { stepFromPart } from "@/lib/agent-activity";
+import { buildSkillsPrompt } from "@/lib/skills";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -45,6 +46,9 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
 
   // Failover chain: requested model → opencode free → static available
   const store = await readStoreForRequest(request).catch(() => null);
+  // Plugin skills (catalog + user's enabled set from store prefs) ride along
+  // as extra system text so the model knows exactly what it can do.
+  const skillsPrompt = buildSkillsPrompt(store?.settings?.prefs);
   const storeKeys = store?.settings?.apiKeys || {};
   const staticChain = buildModelChain(model, storeKeys, process.env);
   const nativeFree = (await listNativeModels())
@@ -125,7 +129,8 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
           model: splitModel(m),
         };
         if (agent) promptParams.agent = agent;
-        if (systemPrompt) promptParams.system = systemPrompt;
+        const systemAll = [systemPrompt, skillsPrompt].filter(Boolean).join("\n\n");
+        if (systemAll) promptParams.system = systemAll;
 
         const result: any = await client.session.prompt(promptParams);
         if (!result?.data) {
