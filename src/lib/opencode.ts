@@ -43,9 +43,23 @@ function ensureRuntimeEnv() {
     process.env.HOME = path.join(os.tmpdir(), "opencode-home");
   }
   if (!process.env.SHELL) process.env.SHELL = "/bin/bash";
+  // Keep every opencode write inside writable tmp (Vercel /var/task is read-only)
+  const home = process.env.HOME;
+  const xdg = {
+    XDG_DATA_HOME: path.join(home, ".local", "share"),
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    XDG_STATE_HOME: path.join(home, ".local", "state"),
+    XDG_CACHE_HOME: path.join(home, ".cache"),
+  };
+  for (const [k, v] of Object.entries(xdg)) {
+    if (!process.env[k]) process.env[k] = v;
+    try { fs.mkdirSync(v, { recursive: true }); } catch {}
+  }
+  process.env.OPENCODE_WORKSPACE = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
   try {
-    fs.mkdirSync(process.env.HOME, { recursive: true });
-    fs.mkdirSync(path.join(process.env.HOME, ".opencode", "bin"), { recursive: true });
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(path.join(home, ".opencode", "bin"), { recursive: true });
+    fs.mkdirSync(process.env.OPENCODE_WORKSPACE, { recursive: true });
   } catch {}
   const bin = getOpencodePath();
   const dir = bin ? path.dirname(bin) : path.dirname(BUNDLED_BIN);

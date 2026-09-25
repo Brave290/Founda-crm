@@ -10,22 +10,29 @@ export async function POST(request: NextRequest) {
       await request.json();
 
     const client = await ensureServer();
+    const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
 
     // Create session if not provided
     let targetSessionId = sessionId;
     if (!targetSessionId) {
-      const createParams: any = { title: prompt?.slice(0, 60) || "New Chat" };
+      const createParams: any = {
+        title: prompt?.slice(0, 60) || "New Chat",
+        directory,
+      };
       if (agent) createParams.agent = agent;
       if (model) {
         const [providerID, modelID] = model.includes("/")
           ? model.split("/")
           : [model, "default"];
-        createParams.model = { providerID, modelID };
+        createParams.model = { providerID, id: modelID };
       }
-      const created = await client.session.create(createParams);
-      targetSessionId = (created as any)?.data?.id;
+      const created: any = await client.session.create(createParams);
+      targetSessionId = created?.data?.id;
       if (!targetSessionId) {
-        throw new Error("Failed to create opencode session");
+        throw new Error(
+          "Failed to create opencode session: " +
+            JSON.stringify(created?.error || created?.response?.status || created || "unknown")
+        );
       }
     }
 
@@ -43,7 +50,11 @@ export async function POST(request: NextRequest) {
     }
     if (systemPrompt) promptParams.system = systemPrompt;
 
-    const result = await client.session.prompt(promptParams);
+    promptParams.directory = directory;
+    const result: any = await client.session.prompt(promptParams);
+    if (!result?.data && result?.error) {
+      throw new Error("opencode prompt failed: " + JSON.stringify(result.error));
+    }
 
     // Extract text from response
     const data = (result as any)?.data;
