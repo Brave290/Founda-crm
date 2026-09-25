@@ -16,7 +16,7 @@ export default function LoginPage() {
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (mounted && !authLoading && (user || guest)) router.replace("/dashboard");
+    if (mounted && !authLoading && (user || guest)) router.replace(`/sessions/${crypto.randomUUID()}`);
   }, [mounted, authLoading, user, guest]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,13 +25,13 @@ export default function LoginPage() {
     setError("");
     const { error } = await login(email, password);
     if (error) { setError(error); setLoading(false); return; }
-    router.push("/dashboard");
+    router.push(`/sessions/${crypto.randomUUID()}`);
     router.refresh();
   };
 
   const handleGuest = () => {
     continueAsGuest();
-    router.push("/dashboard");
+    router.push(`/sessions/${crypto.randomUUID()}`);
   };
 
   return (

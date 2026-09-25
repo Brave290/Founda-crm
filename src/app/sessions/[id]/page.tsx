@@ -8,11 +8,13 @@ import { trackUsage, canSend, loadUsage, UsagePanel, useToast } from "@/componen
 import {
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, BotIcon,
   ImageIcon, MicIcon, SendIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
-  AlertIcon, ArrowLeftIcon, ChevronDownIcon, CheckIcon,
+  AlertIcon, ChevronDownIcon, CheckIcon, MenuIcon,
   ShieldIcon, DownloadIcon, TrashIcon, LayersIcon, BarChartIcon,
 } from "@/components/icons";
 import { Markdown } from "@/components/markdown";
 import { CommandPalette, type PaletteAction } from "@/components/palette";
+import { Sidebar } from "@/components/sidebar";
+import { SettingsModal } from "@/components/settings-modal";
 import { buildAuditPrompt } from "@/lib/skills";
 
 interface Message {
@@ -54,6 +56,8 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = params.id as string;
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const isGuest = searchParams.get("guest") === "1";
 
   const { user, guest, loading: authLoading } = useAuth();
@@ -537,42 +541,49 @@ export default function ChatPage() {
   ];
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden">
+    <div className="h-screen flex bg-[#0b0f17]">
       <Toaster />
+      <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} currentId={sessionId} onOpenSettings={() => setSettingsOpen(true)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
+      <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden bg-[#0b0f17]">
       {/* Header */}
-      <header className="glass-strong hairline-b px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 relative z-20">
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.push("/dashboard")}
-            className="glass-btn p-2 rounded-lg text-slate-400 hover:text-white" title="Back">
-            <ArrowLeftIcon size={15} />
+      <header className="h-12 px-2 sm:px-4 flex items-center justify-between shrink-0 relative z-20 border-b border-white/[0.06]">
+        <div className="flex items-center gap-1 min-w-0">
+          <button onClick={() => setDrawerOpen(true)}
+            className="lg:hidden p-2 -ml-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06]" title="Menu">
+            <MenuIcon size={16} />
           </button>
-          <div className="hidden sm:block min-w-0">
-            <div className="text-[13px] font-medium text-white truncate max-w-[280px]">
-              {messages.length > 0 && messages[0].content ? messages[0].content.slice(0, 40) + "…" : <span className="gradient-text font-semibold">New chat</span>}
+          <div className="min-w-0">
+            <div className="text-[13px] text-slate-300 truncate max-w-[42vw] sm:max-w-[340px]">
+              {messages.length > 0 && messages[0].content ? messages[0].content.slice(0, 50) + "…" : "New chat"}
             </div>
-            <div className="text-[10px] text-slate-600">{messages.length} messages</div>
+            <div className="text-[10px] text-slate-700">{messages.length} messages</div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button onClick={() => router.push("/dashboard")}
+            className="hidden lg:block text-[12.5px] text-slate-500 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors">
+            Dashboard
+          </button>
           {/* Agent picker */}
           <div className="relative">
             <button onClick={() => setShowAgentPicker(!showAgentPicker)}
-              className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white">
-              <span className={`h-2 w-2 rounded-full ${activeAgentMeta?.dot || "bg-emerald-400"} shadow-[0_0_8px_currentColor]`} />
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-300 hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
+              <span className={`h-2 w-2 rounded-full ${activeAgentMeta?.dot || "bg-emerald-400"}`} />
               {activeAgentMeta?.icon}
               <span className="hidden sm:inline">{activeAgentMeta?.name}</span>
               <ChevronDownIcon size={12} className="text-slate-500" />
             </button>
             {showAgentPicker && (
-              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#101a30]/95 backdrop-blur-xl shadow-2xl shadow-emerald-950/50 z-50 py-1.5 animate-scale-in overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#141a26] shadow-2xl shadow-black/60 z-50 py-1.5 animate-scale-in overflow-hidden">
                 <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-slate-600">Free agents</div>
                 {AGENTS.map((a) => (
                   <button key={a.id}
                     onClick={() => { setActiveAgent(a.id); setShowAgentPicker(false); }}
-                    className={`w-full text-left px-4 py-2 hover:bg-emerald-500/10 flex items-center gap-3 transition-colors ${
-                      activeAgent === a.id ? "text-white bg-emerald-500/[0.08]" : "text-slate-400"
+                    className={`w-full text-left px-4 py-2 hover:bg-white/[0.06] flex items-center gap-3 transition-colors ${
+                      activeAgent === a.id ? "text-white bg-white/[0.08]" : "text-slate-400"
                     }`}>
                     <span className={`h-6 w-6 rounded-md bg-gradient-to-br ${a.grad} flex items-center justify-center text-white shrink-0`}>
                       {a.icon}
@@ -591,7 +602,7 @@ export default function ChatPage() {
           {/* Model picker */}
           <div className="relative">
             <button onClick={() => setShowModelPicker(!showModelPicker)}
-              className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-slate-300 hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
               title="Model">
               <svg className="w-4 h-4 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5m-4.25-11.396c.251.023.501.05.75.082M5 14.5l-1.455 2.91A2.25 2.25 0 005.318 21H18.68a2.25 2.25 0 001.773-3.59L19 14.5" />
@@ -602,9 +613,9 @@ export default function ChatPage() {
               <ChevronDownIcon size={12} className="text-slate-500" />
             </button>
             {showModelPicker && (
-              <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-white/10 bg-[#101a30]/95 backdrop-blur-xl shadow-2xl shadow-emerald-950/50 z-50 py-1.5 animate-scale-in overflow-hidden max-h-[60vh] overflow-y-auto">
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-white/10 bg-[#141a26] shadow-2xl shadow-black/60 z-50 py-1.5 animate-scale-in overflow-hidden max-h-[60vh] overflow-y-auto">
                 <button onClick={() => pickModel("")}
-                  className={`w-full text-left px-4 py-2 hover:bg-emerald-500/10 flex items-center justify-between transition-colors ${!model ? "text-white bg-emerald-500/[0.08]" : "text-slate-400"}`}>
+                  className={`w-full text-left px-4 py-2 hover:bg-white/[0.06] flex items-center justify-between transition-colors ${!model ? "text-white bg-white/[0.08]" : "text-slate-400"}`}>
                   <span className="text-[13px]">Auto (default)</span>
                   {!model && <CheckIcon size={13} className="text-emerald-400" />}
                 </button>
@@ -618,7 +629,7 @@ export default function ChatPage() {
                       </div>
                       {group.map((m) => (
                         <button key={m.id} onClick={() => pickModel(m.id)}
-                          className={`w-full text-left px-4 py-2 hover:bg-emerald-500/10 flex items-center justify-between transition-colors ${model === m.id ? "text-white bg-emerald-500/[0.08]" : "text-slate-400"}`}>
+                          className={`w-full text-left px-4 py-2 hover:bg-white/[0.06] flex items-center justify-between transition-colors ${model === m.id ? "text-white bg-white/[0.08]" : "text-slate-400"}`}>
                           <div className="min-w-0">
                             <div className="text-[13px] truncate">{m.label}</div>
                             <div className="text-[10px] text-slate-600 font-mono truncate">{m.id}</div>
@@ -637,7 +648,7 @@ export default function ChatPage() {
           </div>
 
           <button onClick={() => setShowUsage(!showUsage)}
-            className="glass-btn p-2 rounded-lg text-slate-400 hover:text-white" title="Usage">
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors" title="Usage">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
@@ -666,17 +677,17 @@ export default function ChatPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-up">
-              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-sky-500 shadow-lg shadow-teal-500/30 flex items-center justify-center mb-5 text-white">
-                <BotIcon size={24} />
+              <div className="h-12 w-12 rounded-full border border-white/[0.1] bg-white/[0.04] flex items-center justify-center mb-5 text-slate-400">
+                <BotIcon size={22} />
               </div>
-              <h2 className="font-display text-xl font-semibold mb-2 gradient-text">What can I help with?</h2>
+              <h2 className="text-xl font-semibold text-white mb-2">How can I help?</h2>
               <p className="text-slate-500 text-sm mb-8 max-w-md">
                 Chat with your free opencode agent. Voice input, images, and persistent memory available.
               </p>
               <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl w-full">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s} onClick={() => setInput(s)}
-                    className={`rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/10 p-3.5 text-left text-[13px] text-slate-400 hover:text-white transition-all animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
+                    className={`rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] p-3.5 text-left text-[13px] text-slate-400 hover:text-white transition-colors animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
                     {s}
                   </button>
                 ))}
@@ -685,45 +696,35 @@ export default function ChatPage() {
           )}
 
           {messages.map((msg, i) => (
-            <div key={i} className="mb-5 group animate-message-in">
-              <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-semibold ${
+            <div key={i} className="mb-6 group animate-message-in">
+              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[88%] ${
                   msg.role === "user"
-                    ? "bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-600/30"
-                    : `bg-gradient-to-br ${activeAgentMeta?.grad || "from-teal-500 to-emerald-600"} text-white shadow-md`
+                    ? "rounded-3xl bg-[#1a2130] px-4 py-2.5 text-[14px] text-slate-100"
+                    : "w-full"
                 }`}>
-                  {msg.role === "user" ? "You" : <BotIcon size={14} />}
-                </div>
-
-                <div className={`flex-1 min-w-0 ${msg.role === "user" ? "flex justify-end" : ""}`}>
-                  <div className={`inline-block max-w-full rounded-2xl px-4 py-3 text-[14px] ${
-                    msg.role === "user"
-                      ? "msg-user"
-                      : `msg-bot border-l-2 ${activeAgentMeta?.border || "border-l-teal-400/70"}`
-                  }`}>
-                    {msg.image && (
-                      <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
-                        className="max-w-xs w-full rounded-lg mb-2 border border-white/15 bg-slate-900/60 animate-fade-in" />
-                    )}
-                    {msg.role === "assistant" ? (
-                      <Markdown content={msg.content} />
-                    ) : (
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
-                    )}
-                  </div>
+                  {msg.image && (
+                    <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
+                      className="max-w-xs w-full rounded-lg mb-2 border border-white/10 animate-fade-in" />
+                  )}
+                  {msg.role === "assistant" ? (
+                    <Markdown content={msg.content} />
+                  ) : (
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
+                  )}
 
                   {msg.role === "assistant" && (
-                    <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="flex items-center gap-1 mt-2 -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <button onClick={() => copyMsg(msg.content, i)}
-                        className="p-1.5 rounded-md text-slate-600 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors" title="Copy">
+                        className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors" title="Copy">
                         {copiedIdx === i ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                       </button>
                       <button onClick={regenerate} disabled={sending}
-                        className="p-1.5 rounded-md text-slate-600 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-30" title="Regenerate">
+                        className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30" title="Regenerate">
                         <RefreshIcon size={13} />
                       </button>
                       <button onClick={() => copyMsg(msg.content, i)}
-                        className="p-1.5 rounded-md text-slate-600 hover:text-amber-300 hover:bg-teal-500/10 transition-colors" title="Good response">
+                        className="p-1.5 rounded-md text-slate-600 hover:text-white hover:bg-white/[0.06] transition-colors" title="Good response">
                         <ThumbsUpIcon size={13} />
                       </button>
                     </div>
@@ -734,17 +735,13 @@ export default function ChatPage() {
           ))}
 
           {sending && (
-            <div className="flex gap-3 mb-5 animate-message-in">
-              <div className={`shrink-0 h-7 w-7 rounded-lg bg-gradient-to-br ${activeAgentMeta?.grad || "from-teal-500 to-emerald-600"} flex items-center justify-center text-white shadow-md`}>
-                <BotIcon size={14} />
-              </div>
-              <div className="msg-bot rounded-2xl px-4 py-3.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full typing-dot" />
-                  <div className="w-1.5 h-1.5 bg-amber-300 rounded-full typing-dot" />
-                  <div className="w-1.5 h-1.5 bg-sky-400 rounded-full typing-dot" />
-                </div>
-              </div>
+            <div className="mb-6 flex items-center gap-2.5 animate-message-in">
+              <span className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+              </span>
+              <span className="text-[13px] text-slate-600">Thinking…</span>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -754,10 +751,10 @@ export default function ChatPage() {
       {paletteOpen && <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
 
       {/* Input */}
-      <div className="border-t border-white/[0.08] bg-[#0b1120]/90 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
+      <div className="border-t border-white/[0.06] px-4 py-3 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto relative">
           {showCmdList && filteredCmds.length > 0 && (
-            <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/10 bg-[#0e1628]/95 backdrop-blur-xl shadow-2xl shadow-black/50 py-1.5 overflow-hidden animate-scale-in z-30">
+            <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/[0.09] bg-[#141a26] shadow-2xl shadow-black/60 py-1.5 overflow-hidden animate-scale-in z-30">
               <div className="px-4 py-1 text-[10px] uppercase tracking-wider text-slate-600">Commands</div>
               {filteredCmds.map((c, i) => (
                 <button key={c.cmd}
@@ -766,8 +763,8 @@ export default function ChatPage() {
                     if (input.split(/\s/)[0] === c.cmd) runSlash(c.cmd, input.slice(c.cmd.length).trim());
                     else setInput(c.cmd + " ");
                   }}
-                  className={`w-full text-left px-4 py-2 flex items-center gap-3 transition-colors ${i === cmdIdx ? "bg-emerald-500/[0.1] text-white" : "text-slate-400"}`}>
-                  <span className={`font-mono text-[12.5px] ${i === cmdIdx ? "text-emerald-300" : "text-slate-500"}`}>{c.cmd}</span>
+                  className={`w-full text-left px-4 py-2 flex items-center gap-3 transition-colors ${i === cmdIdx ? "bg-white/[0.07] text-white" : "text-slate-400"}`}>
+                  <span className={`font-mono text-[12.5px] ${i === cmdIdx ? "text-white" : "text-slate-500"}`}>{c.cmd}</span>
                   <span className="text-[12px] text-slate-600 truncate">{c.desc}</span>
                 </button>
               ))}
@@ -775,13 +772,13 @@ export default function ChatPage() {
           )}
           {attachedImage && (
             <div className="mb-2 relative inline-block animate-scale-in">
-              <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-emerald-400/30 shadow-lg shadow-emerald-600/20" />
+              <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-white/10" />
               <button onClick={() => setAttachedImage(null)}
-                className="absolute -top-2 -right-2 h-5 w-5 bg-gradient-to-br from-emerald-500 to-teal-500 text-white rounded-full flex items-center justify-center text-xs hover:brightness-110 transition font-medium">×</button>
+                className="absolute -top-2 -right-2 h-5 w-5 bg-[#1a2130] border border-white/15 text-slate-300 rounded-full flex items-center justify-center text-xs hover:text-white transition-colors">×</button>
             </div>
           )}
 
-          <div className="glass-input flex items-end gap-2 rounded-2xl px-3 py-2 focus-within:border-emerald-400/50 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.15),0_0_28px_rgba(139,92,246,0.18)]">
+          <div className="flex items-end gap-2 rounded-2xl px-3 py-2.5 bg-[#141b2a] border border-white/[0.09] focus-within:border-white/25 transition-colors">
             <button onClick={() => fileInputRef.current?.click()}
               className="p-2 rounded-lg text-slate-500 hover:text-amber-300 transition-colors shrink-0" title="Upload image">
               <ImageIcon size={18} />
@@ -803,10 +800,10 @@ export default function ChatPage() {
 
             <button onClick={() => sendMessage()}
               disabled={sending || (!input.trim() && !attachedImage) || limitReached}
-              className={`p-2.5 rounded-xl transition-all shrink-0 ${
+              className={`p-2.5 rounded-xl transition-colors shrink-0 ${
                 sending || (!input.trim() && !attachedImage) || limitReached
                   ? "bg-white/[0.06] text-slate-700"
-                  : "bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-600/35 hover:brightness-110 hover:shadow-teal-500/40 active:scale-95"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95"
               }`} title="Send (Enter)">
               <SendIcon size={17} />
             </button>
@@ -817,9 +814,10 @@ export default function ChatPage() {
               {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
                 <>Enter send · / commands · ⌘K palette{voiceSupported && " · voice"}</>}
             </div>
-            <div className="text-[10px] gradient-text font-medium">Powered by opencode</div>
+            <div className="text-[10px] text-slate-700">Founda</div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ export default function RegisterPage() {
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (mounted && !authLoading && user) router.replace("/dashboard");
+    if (mounted && !authLoading && user) router.replace(`/sessions/${crypto.randomUUID()}`);
   }, [mounted, authLoading, user]);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -29,13 +29,13 @@ export default function RegisterPage() {
     const { error, needsConfirm } = await register(email, password, fullName);
     if (error) { setError(error); setLoading(false); return; }
     if (needsConfirm) { setNeedsConfirm(true); setLoading(false); return; }
-    router.push("/dashboard");
+    router.push(`/sessions/${crypto.randomUUID()}`);
     router.refresh();
   };
 
   const handleGuest = () => {
     continueAsGuest();
-    router.push("/dashboard");
+    router.push(`/sessions/${crypto.randomUUID()}`);
   };
 
   if (needsConfirm) {
