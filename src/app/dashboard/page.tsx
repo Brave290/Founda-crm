@@ -588,7 +588,6 @@ function SettingsTab({ user, guest, onLogout }: any) {
     try {
       const store = await import("@/lib/store");
       store.clearAllStoreData();
-      setGuestSessions([]);
       toast("Server data cleared", "success");
     } catch {
       toast("Could not clear data", "error");

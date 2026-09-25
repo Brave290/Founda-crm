@@ -21,6 +21,18 @@ const ASSETS = {
 
 const log = (m) => console.log(`[fetch-opencode] ${m}`);
 
+// Build-info marker ships inside .opencode/bin (traced into API functions) so
+// production can report what happened at build time.
+function marker(status, message) {
+  try {
+    fs.mkdirSync(BIN_DIR, { recursive: true });
+    fs.writeFileSync(
+      path.join(BIN_DIR, "build-info.txt"),
+      `status=${status}\nversion=${VERSION}\nplatform=${process.platform}-${process.arch}\nmessage=${message}\nat=${new Date().toISOString()}\n`
+    );
+  } catch {}
+}
+
 function usable(bin) {
   try {
     execSync(`"${bin}" --version`, { stdio: "pipe", timeout: 20000 });
@@ -34,6 +46,7 @@ try {
   if (fs.existsSync(BIN)) {
     if (usable(BIN)) {
       log(`already bundled: ${execSync(`"${BIN}" --version`, { stdio: "pipe" }).toString().trim()}`);
+      marker("ok", "reused existing binary");
       process.exit(0);
     }
     log("existing binary not runnable — re-downloading");
@@ -43,6 +56,7 @@ try {
   const asset = ASSETS[key];
   if (!asset) {
     log(`no release asset for ${key} — skipping (runtime install will cover it)`);
+    marker("skipped", `no asset for ${key}`);
     process.exit(0);
   }
 
@@ -84,11 +98,15 @@ try {
   fs.rmSync(extractDir, { recursive: true, force: true });
 
   if (usable(BIN)) {
-    log(`bundled: ${execSync(`"${BIN}" --version`, { stdio: "pipe" }).toString().trim()}`);
+    const v = execSync(`"${BIN}" --version`, { stdio: "pipe" }).toString().trim();
+    log(`bundled: ${v}`);
+    marker("ok", v);
   } else {
     log("downloaded, but runtime verification failed on this machine (expected when cross-platform)");
+    marker("downloaded-unverified", "cross-platform binary, verify on server");
   }
 } catch (e) {
   log(`download skipped (non-fatal): ${e.message}`);
+  marker("failed", e.message);
 }
 process.exit(0);

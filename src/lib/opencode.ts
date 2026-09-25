@@ -12,6 +12,29 @@ const OPENCODE_DIR = path.join(process.cwd(), ".opencode-runtime");
 const BUNDLED_BIN = path.join(process.cwd(), ".opencode", "bin", "opencode");
 const RUNTIME_BIN = path.join(OPENCODE_DIR, "bin", "opencode");
 const INSTALL_DIR = process.env.OPENCODE_HOME || OPENCODE_DIR;
+const OPENCODE_VERSION = process.env.OPENCODE_VERSION || "v1.18.32";
+
+function logSafe(m: string) {
+  try { console.error(`[opencode] ${m}`); } catch {}
+}
+
+function findBinary(dir: string, depth: number): string | null {
+  if (depth > 3) return null;
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isFile() && (e.name === "opencode" || e.name === "opencode.exe")) return p;
+  }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      const found = findBinary(p0(e, dir), depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+function p0(e: fs.Dirent, dir: string) { return path.join(dir, e.name); }
 
 // --- Runtime environment (Vercel has no HOME; bundled binary lives in cwd) ---
 
@@ -83,6 +106,27 @@ export function getOpencodeVersion(): string | null {
   }
 }
 
+export function opencodeDiagnostics() {
+  const candidates = binaryCandidates().map((c) => {
+    let size = -1;
+    try { size = fs.statSync(c).size; } catch {}
+    return { path: c, exists: size >= 0, size };
+  });
+  let buildInfo = null;
+  try { buildInfo = fs.readFileSync(path.join(BUNDLED_BIN, "..", "build-info.txt"), "utf8"); } catch {}
+  let systemPath = null;
+  try { systemPath = execSync("command -v opencode", { encoding: "utf-8", stdio: "pipe", env: process.env }).trim(); } catch {}
+  return {
+    cwd: process.cwd(),
+    home: process.env.HOME,
+    binPath: getOpencodePath(),
+    candidates,
+    systemPath,
+    buildInfo,
+    pathHead: (process.env.PATH || "").split(":").slice(0, 4),
+  };
+}
+
 export async function installOpencode(): Promise<{ success: boolean; message: string }> {
   try {
     ensureRuntimeEnv();
@@ -95,7 +139,42 @@ export async function installOpencode(): Promise<{ success: boolean; message: st
     });
     ensureRuntimeEnv();
     if (isInstalled()) return { success: true, message: "opencode installed successfully" };
-    return { success: false, message: "Install script ran but binary was not found" };
+    logSafe("install script did not produce a binary, trying direct download");
+  } catch (e: any) {
+    logSafe(`install script failed (${e.message}), trying direct download`);
+  }
+
+  // Fallback: pull the release tarball directly (works without HOME/sudo)
+  try {
+    const key = `${process.platform}-${process.arch}`;
+    const assets: Record<string, string> = {
+      "linux-x64": "opencode-linux-x64.tar.gz",
+      "linux-arm64": "opencode-linux-arm64.tar.gz",
+      "darwin-x64": "opencode-darwin-x64.tar.gz",
+      "darwin-arm64": "opencode-darwin-arm64.tar.gz",
+    };
+    const asset = assets[key];
+    if (!asset) return { success: false, message: `No opencode build for ${key}` };
+    const binDir = path.join(process.env.HOME!, ".opencode", "bin");
+    fs.mkdirSync(binDir, { recursive: true });
+    const tar = path.join(os.tmpdir(), asset);
+    const url = `https://github.com/anomalyco/opencode/releases/download/${OPENCODE_VERSION}/${asset}`;
+    execSync(`curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 -o "${tar}" "${url}"`, {
+      stdio: "pipe", timeout: 320_000, shell: "/bin/bash", env: process.env,
+    });
+    const extract = path.join(os.tmpdir(), `oc-extract-${Date.now()}`);
+    fs.mkdirSync(extract, { recursive: true });
+    execSync(`tar -xzf "${tar}" -C "${extract}"`, { stdio: "pipe", timeout: 60_000 });
+    const found = findBinary(extract, 0);
+    if (!found) throw new Error("binary not found in archive");
+    const dest = path.join(binDir, "opencode");
+    fs.renameSync(found, dest);
+    fs.chmodSync(dest, 0o755);
+    fs.rmSync(tar, { force: true });
+    fs.rmSync(extract, { recursive: true, force: true });
+    ensureRuntimeEnv();
+    if (isInstalled()) return { success: true, message: "opencode installed (direct download)" };
+    return { success: false, message: "Downloaded but binary still not resolvable" };
   } catch (e: any) {
     return { success: false, message: `Install failed: ${e.message}` };
   }

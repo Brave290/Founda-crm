@@ -4,6 +4,7 @@ import {
   installOpencode,
   upgradeOpencode,
   getOpencodeVersion,
+  opencodeDiagnostics,
 } from "@/lib/opencode";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function GET() {
   try {
     const installed = isInstalled();
     const version = getOpencodeVersion();
-    return NextResponse.json({ installed, version });
+    return NextResponse.json({ installed, version, diag: opencodeDiagnostics() });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

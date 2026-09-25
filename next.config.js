@@ -22,6 +22,7 @@ const nextConfig = {
       "/api/chat": [".opencode/bin/**"],
       "/api/autonomous": [".opencode/bin/**"],
       "/api/opencode/install": [".opencode/bin/**"],
+      "/api/opencode/status": [".opencode/bin/**"],
       "/api/opencode/agents": [".opencode/bin/**"],
       "/api/opencode/mcp": [".opencode/bin/**"],
       "/api/opencode/auth": [".opencode/bin/**"],
