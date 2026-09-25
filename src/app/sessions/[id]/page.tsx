@@ -10,6 +10,7 @@ import {
   ImageIcon, MicIcon, SendIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
   AlertIcon, ArrowLeftIcon, ChevronDownIcon, CheckIcon,
 } from "@/components/icons";
+import { Markdown } from "@/components/markdown";
 
 interface Message {
   id?: string;
@@ -364,7 +365,11 @@ export default function ChatPage() {
                       : `msg-bot border-l-2 ${activeAgentMeta?.border || "border-l-teal-400/70"}`
                   }`}>
                     {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-lg mb-2 border border-white/15" />}
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
+                    {msg.role === "assistant" ? (
+                      <Markdown content={msg.content} />
+                    ) : (
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
+                    )}
                   </div>
 
                   {msg.role === "assistant" && (
