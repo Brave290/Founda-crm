@@ -323,6 +323,7 @@ export async function ensureServer(): Promise<OpencodeClient> {
 
   const result = await createOpencode({
     config: {} as any,
+    timeout: 60_000, // cold-start spawn of a 180MB binary can exceed 5s
   });
 
   client = result.client;

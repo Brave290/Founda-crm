@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureServer } from "@/lib/opencode";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // In-memory store of running autonomous tasks
 const autonomousTasks = new Map<string, { task: string; repo: string; status: string; startedAt: number; log: string[] }>();
