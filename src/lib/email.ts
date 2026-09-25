@@ -17,6 +17,18 @@ export function normalizeSmtp(raw: any): SmtpConfig | null {
   };
 }
 
+/** Store-config first, then SMTP_* env vars (set in Vercel). */
+export function resolveSmtp(storeCfg: any): SmtpConfig | null {
+  const fromStore = normalizeSmtp(storeCfg);
+  if (fromStore) return fromStore;
+  return normalizeSmtp({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  });
+}
+
 export async function sendMail(
   cfg: SmtpConfig,
   opts: { to: string; subject: string; text: string }

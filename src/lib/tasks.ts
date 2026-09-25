@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ensureServer, setProviderAuth } from "@/lib/opencode";
 import { buildModelChain, keyForModel } from "@/lib/models";
 import { readStoreData } from "@/lib/store-server";
-import { normalizeSmtp, sendMail } from "@/lib/email";
+import { resolveSmtp, sendMail } from "@/lib/email";
 
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -118,7 +118,7 @@ async function notify(t: TaskRow, result: string): Promise<string> {
         ? { kind: "user", id: t.owner_id }
         : { kind: "guest", id: t.owner_id }) as any
     ).catch(() => null);
-    const smtp = normalizeSmtp(store?.settings?.prefs?.email);
+    const smtp = resolveSmtp(store?.settings?.prefs?.email);
     if (!smtp) return result + "\n\n(Email not sent: SMTP is not configured in Settings → Schedule.)";
     await sendMail(smtp, {
       to: t.email,

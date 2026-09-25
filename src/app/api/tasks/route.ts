@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveStoreTarget, readStoreData } from "@/lib/store-server";
 import { runDueTasks, nextRunAt } from "@/lib/tasks";
-import { normalizeSmtp, sendMail } from "@/lib/email";
+import { resolveSmtp, sendMail } from "@/lib/email";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +36,16 @@ export async function GET(request: NextRequest) {
     const tasks = await listFor(owner);
     const store = await readStoreData(owner as any).catch(() => null);
     const emailCfg = store?.settings?.prefs?.email || {};
+    const envFallback = emailCfg.user ? null : resolveSmtp(null);
     return NextResponse.json({
       tasks,
-      email: { host: emailCfg.host || "", port: emailCfg.port || 587, user: emailCfg.user || "" },
+      email: {
+        host: emailCfg.host || envFallback?.host || "",
+        port: emailCfg.port || envFallback?.port || 587,
+        user: emailCfg.user || envFallback?.user || "",
+        hasPass: Boolean(emailCfg.pass || process.env.SMTP_PASS),
+        source: emailCfg.user ? "store" : envFallback ? "env" : "none",
+      },
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -130,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "emailtest") {
-      const cfg = normalizeSmtp(body.smtp);
+      const cfg = resolveSmtp(body.smtp);
       if (!cfg) return NextResponse.json({ error: "SMTP user & password required" }, { status: 400 });
       const to = String(body.to || cfg.user).slice(0, 200);
       await sendMail(cfg, {
