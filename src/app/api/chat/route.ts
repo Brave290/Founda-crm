@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
 
     // Extract text from response
     const data = (result as any)?.data;
+    const info = data?.info;
+    if (info?.error) {
+      const err: any = info.error;
+      const detail = err?.data ? JSON.stringify(err.data) : JSON.stringify(err);
+      throw new Error(`model error [${err?.name || "unknown"}]: ${detail}`);
+    }
     let content = "";
     if (data) {
       if (typeof data === "string") {
