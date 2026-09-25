@@ -9,8 +9,11 @@ import {
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, BotIcon,
   ImageIcon, MicIcon, SendIcon, CopyIcon, RefreshIcon, ThumbsUpIcon,
   AlertIcon, ArrowLeftIcon, ChevronDownIcon, CheckIcon,
+  ShieldIcon, DownloadIcon, TrashIcon, LayersIcon, BarChartIcon,
 } from "@/components/icons";
 import { Markdown } from "@/components/markdown";
+import { CommandPalette, type PaletteAction } from "@/components/palette";
+import { buildAuditPrompt } from "@/lib/skills";
 
 interface Message {
   id?: string;
@@ -36,6 +39,15 @@ const SUGGESTIONS = [
   "Add tests to my component",
 ];
 
+const COMMANDS = [
+  { cmd: "/clear", desc: "Clear this conversation" },
+  { cmd: "/help", desc: "List all commands" },
+  { cmd: "/audit", desc: "Run a security audit (args: scope or pasted code)", arg: true },
+  { cmd: "/model", desc: "Set model — /model pollinations/openai-fast", arg: true },
+  { cmd: "/agent", desc: "Switch agent — /agent plan", arg: true },
+  { cmd: "/export", desc: "Export chat — /export json | md", arg: true },
+];
+
 export default function ChatPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -55,6 +67,9 @@ export default function ChatPage() {
   const [showUsage, setShowUsage] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [model, setModel] = useState<string>("");
+  const [cmdIdx, setCmdIdx] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +88,25 @@ export default function ChatPage() {
     );
     const usage = loadUsage();
     if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
+  }, []);
+
+  const showCmdList = input.startsWith("/") && !sending;
+  const filteredCmds = showCmdList
+    ? COMMANDS.filter((c) => c.cmd.startsWith(input.split(/\s/)[0]))
+    : [];
+
+  useEffect(() => setCmdIdx(0), [input]);
+
+  // Cmd/Ctrl+K command palette
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   }, []);
 
   // Load messages (server-backed store for guests — hydrate first)
@@ -137,8 +171,77 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async () => {
-    if ((!input.trim() && !attachedImage) || sending) return;
+  const exportChat = (format: string) => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const name = `founda-chat-${stamp}`;
+    let blob: Blob;
+    let ext: string;
+    if (format === "md") {
+      const md = messages
+        .map((m) => `**${m.role === "user" ? "You" : activeAgentMeta?.name || "Assistant"}**:\n\n${m.content}`)
+        .join("\n\n---\n\n");
+      blob = new Blob([`# Founda chat\n\n${md}\n`], { type: "text/markdown" });
+      ext = "md";
+    } else {
+      blob = new Blob([JSON.stringify({ sessionId, model, agent: activeAgent, messages }, null, 2)], {
+        type: "application/json",
+      });
+      ext = "json";
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Exported .${ext}`, "success");
+  };
+
+  const runSlash = async (cmd: string, arg: string) => {
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    if (cmd === "/clear") {
+      setMessages([]);
+      await saveMessages([]);
+      toast("Conversation cleared", "success");
+      return;
+    }
+    if (cmd === "/help") {
+      const list = COMMANDS.map((c) => `**${c.cmd}** — ${c.desc}`).join("\n");
+      const help: Message = { role: "assistant", content: `### Commands\n\n${list}\n\nTip: press **⌘K** (Ctrl+K) for the command palette.` };
+      const withMsg = [...messages, help];
+      setMessages(withMsg);
+      await saveMessages(withMsg);
+      return;
+    }
+    if (cmd === "/model") {
+      if (!arg) { toast(model ? `Current: ${model}` : "Using default model. Usage: /model pollinations/openai-fast", "success"); return; }
+      setModel(arg);
+      toast(`Model set to ${arg}`, "success");
+      return;
+    }
+    if (cmd === "/agent") {
+      const a = AGENTS.find((x) => x.id === arg.toLowerCase() || x.name.toLowerCase() === arg.toLowerCase());
+      if (a) { setActiveAgent(a.id); toast(`Agent: ${a.name}`, "success"); }
+      else toast(`Agents: ${AGENTS.map((x) => x.id).join(", ")}`, "error");
+      return;
+    }
+    if (cmd === "/export") {
+      exportChat(arg === "md" || arg === "markdown" ? "md" : "json");
+      return;
+    }
+    if (cmd === "/audit") {
+      await sendMessage({
+        prompt: buildAuditPrompt(arg),
+        label: arg ? `/audit ${arg}` : "/audit this codebase",
+      });
+    }
+  };
+
+  const sendMessage = async (opts?: { prompt?: string; label?: string; systemPrompt?: string }) => {
+    const overridePrompt = opts?.prompt;
+    const body = overridePrompt ?? input.trim();
+    if ((!body && !attachedImage) || sending) return;
     if (!canSend()) {
       setLimitReached(true);
       toast("Daily limit reached. Resets at midnight.", "error");
@@ -147,12 +250,12 @@ export default function ChatPage() {
 
     const userMsg: Message = {
       role: "user",
-      content: input.trim(),
-      image: attachedImage || undefined,
+      content: opts?.label || body,
+      image: overridePrompt ? undefined : attachedImage || undefined,
     };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    setInput("");
+    if (!overridePrompt) setInput("");
     setAttachedImage(null);
     setSending(true);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -165,8 +268,10 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: isGuest ? null : sessionId,
-          prompt: userMsg.content,
+          prompt: overridePrompt || userMsg.content,
           agent: activeAgent,
+          ...(model ? { model } : {}),
+          ...(opts?.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
         }),
       });
       const data = await res.json();
@@ -234,6 +339,20 @@ export default function ChatPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showCmdList && filteredCmds.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setCmdIdx((i) => (i + 1) % filteredCmds.length); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setCmdIdx((i) => (i - 1 + filteredCmds.length) % filteredCmds.length); return; }
+      if (e.key === "Tab") { e.preventDefault(); setInput(filteredCmds[cmdIdx].cmd + " "); return; }
+      if (e.key === "Escape") { e.preventDefault(); setInput(""); return; }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const sel = filteredCmds[cmdIdx];
+        const rest = input.slice(sel.cmd.length).trim();
+        if (input.split(/\s/)[0] === sel.cmd) runSlash(sel.cmd, rest);
+        else setInput(sel.cmd + " ");
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
@@ -246,6 +365,25 @@ export default function ChatPage() {
   }
 
   const activeAgentMeta = AGENTS.find((a) => a.id === activeAgent);
+
+  const paletteActions: PaletteAction[] = [
+    { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest ? "?guest=1" : ""}`) },
+    { id: "audit", group: "Chat", label: "Run security audit", hint: "/audit", icon: <ShieldIcon size={14} />, run: () => runSlash("/audit", "") },
+    { id: "export-json", group: "Chat", label: "Export chat as JSON", hint: "/export json", icon: <DownloadIcon size={14} />, run: () => exportChat("json") },
+    { id: "export-md", group: "Chat", label: "Export chat as Markdown", hint: "/export md", icon: <DownloadIcon size={14} />, run: () => exportChat("md") },
+    { id: "clear", group: "Chat", label: "Clear conversation", hint: "/clear", icon: <TrashIcon size={14} />, run: () => runSlash("/clear", "") },
+    ...AGENTS.map((a) => ({
+      id: `agent-${a.id}`,
+      group: "Agents",
+      label: `Switch to ${a.name}`,
+      hint: `/agent ${a.id}`,
+      icon: a.icon as React.ReactNode,
+      run: () => { setActiveAgent(a.id); toast(`Agent: ${a.name}`, "success"); },
+    })),
+    { id: "help", group: "Navigation", label: "Show commands help", hint: "/help", icon: <ClipboardIcon size={14} />, run: () => runSlash("/help", "") },
+    { id: "dashboard", group: "Navigation", label: "Go to dashboard", hint: "sessions & settings", icon: <LayersIcon size={14} />, run: () => router.push("/dashboard") },
+    { id: "usage", group: "Navigation", label: "Toggle usage panel", hint: "limits & quota", icon: <BarChartIcon size={14} />, run: () => setShowUsage((v) => !v) },
+  ];
 
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
@@ -411,9 +549,28 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {paletteOpen && <CommandPalette actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
+
       {/* Input */}
       <div className="border-t border-white/[0.08] bg-[#0b1120]/90 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto relative">
+          {showCmdList && filteredCmds.length > 0 && (
+            <div className="absolute bottom-full mb-2 left-0 right-0 rounded-xl border border-white/10 bg-[#0e1628]/95 backdrop-blur-xl shadow-2xl shadow-black/50 py-1.5 overflow-hidden animate-scale-in z-30">
+              <div className="px-4 py-1 text-[10px] uppercase tracking-wider text-slate-600">Commands</div>
+              {filteredCmds.map((c, i) => (
+                <button key={c.cmd}
+                  onMouseEnter={() => setCmdIdx(i)}
+                  onClick={() => {
+                    if (input.split(/\s/)[0] === c.cmd) runSlash(c.cmd, input.slice(c.cmd.length).trim());
+                    else setInput(c.cmd + " ");
+                  }}
+                  className={`w-full text-left px-4 py-2 flex items-center gap-3 transition-colors ${i === cmdIdx ? "bg-emerald-500/[0.1] text-white" : "text-slate-400"}`}>
+                  <span className={`font-mono text-[12.5px] ${i === cmdIdx ? "text-emerald-300" : "text-slate-500"}`}>{c.cmd}</span>
+                  <span className="text-[12px] text-slate-600 truncate">{c.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {attachedImage && (
             <div className="mb-2 relative inline-block animate-scale-in">
               <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-emerald-400/30 shadow-lg shadow-emerald-600/20" />
@@ -442,7 +599,7 @@ export default function ChatPage() {
               <MicIcon size={18} />
             </button>
 
-            <button onClick={sendMessage}
+            <button onClick={() => sendMessage()}
               disabled={sending || (!input.trim() && !attachedImage) || limitReached}
               className={`p-2.5 rounded-xl transition-all shrink-0 ${
                 sending || (!input.trim() && !attachedImage) || limitReached
@@ -456,7 +613,7 @@ export default function ChatPage() {
           <div className="flex items-center justify-between mt-2 px-1">
             <div className="text-[10px] text-slate-700">
               {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
-                <>Enter to send · Shift+Enter newline{voiceSupported && " · voice input available"}</>}
+                <>Enter send · / commands · ⌘K palette{voiceSupported && " · voice"}</>}
             </div>
             <div className="text-[10px] gradient-text font-medium">Powered by opencode</div>
           </div>
