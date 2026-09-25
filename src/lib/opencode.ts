@@ -453,10 +453,18 @@ export async function listNativeModels(): Promise<any[]> {
   try {
     const c = await ensureServer() as any;
     const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
-    const res: any = await c.v2.model.list({ location: { directory } });
-    const data = res?.data?.data || res?.data;
-    lastModelError = res?.error ? JSON.stringify(res.error) : null;
-    return Array.isArray(data) ? data : [];
+    let last: any[] = [];
+    // cold engine sometimes answers the first /model call with [] while
+    // providers finish loading — retry a couple of times before giving up
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res: any = await c.v2.model.list({ location: { directory } });
+      lastModelError = res?.error ? JSON.stringify(res.error) : null;
+      const data = res?.data?.data || res?.data;
+      if (Array.isArray(data) && data.length) return data;
+      if (Array.isArray(data)) last = data;
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+    }
+    return last;
   } catch (e: any) {
     lastModelError = e?.message || String(e);
     return [];
