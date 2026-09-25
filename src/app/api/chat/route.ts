@@ -98,16 +98,13 @@ export async function POST(request: NextRequest) {
               : JSON.stringify(data.content);
         }
 
-        if (content || !isFailoverError(JSON.stringify(info || {}))) break;
+        if (content) break;
         throw new Error("empty response");
       } catch (e: any) {
         lastError = e.message || "model error";
-        if (!isFailoverError(lastError) || m === chain[chain.length - 1]) {
-          if (m === chain[chain.length - 1] && !content) {
-            throw new Error(`model error [${usedModel}]: ${lastError}`);
-          }
-          if (!content) throw new Error(`model error [${usedModel}]: ${lastError}`);
-          break;
+        // Any prompt error is worth retrying with the next model in the chain
+        if (m === chain[chain.length - 1]) {
+          throw new Error(`model error [${usedModel}]: ${lastError}`);
         }
         // else: continue to next model in chain
       }
@@ -131,27 +128,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function isFailoverError(msg: string): boolean {
-  const m = (msg || "").toLowerCase();
-  return (
-    m.includes("429") ||
-    m.includes("rate") ||
-    m.includes("quota") ||
-    m.includes("limit") ||
-    m.includes("billing") ||
-    m.includes("credit") ||
-    m.includes("auth") ||
-    m.includes("api key") ||
-    m.includes("apikey") ||
-    m.includes("unauthorized") ||
-    m.includes("forbidden") ||
-    m.includes("not found") ||
-    m.includes("model_not_found") ||
-    m.includes("overloaded") ||
-    m.includes("unavailable") ||
-    m.includes("empty result") ||
-    m.includes("empty response")
-  );
 }
