@@ -375,7 +375,6 @@ function streamRun(prep: Prep): Response {
         } catch (e: any) {
           flushText();
           send("error", { error: e?.message || "opencode error" });
-          send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
         } finally {
           if (activityTimer) clearTimeout(activityTimer);
           if (textTimer) clearTimeout(textTimer);
