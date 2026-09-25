@@ -276,11 +276,17 @@ function streamRun(prep: Prep): Response {
         markText();
       };
 
+      const dbgTypes = new Map<string, number>();
+      const dbgSamples: any[] = [];
       const handle = (ev: any) => {
         if (closed) return;
         const p: any = ev && (ev.payload ?? ev);
         const type: string = p?.type || "";
         if (!type) return;
+        dbgTypes.set(type, (dbgTypes.get(type) || 0) + 1);
+        if (dbgSamples.length < 25 && (type.includes("text") || type.includes("message"))) {
+          try { dbgSamples.push({ type, props: JSON.stringify(p.properties || {}).slice(0, 300) }); } catch {}
+        }
         const props: any = p.properties || {};
         const cur = prep.ocSession();
         if (props.sessionID && cur && props.sessionID !== cur) return;
@@ -358,6 +364,7 @@ function streamRun(prep: Prep): Response {
           const out = await prep.runWithRecovery();
           flushText();
           if (activityDirty) flushActivity();
+          send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
           send("done", {
             content: out.content,
             sessionId: prep.ocSession(),
@@ -372,6 +379,7 @@ function streamRun(prep: Prep): Response {
         } catch (e: any) {
           flushText();
           send("error", { error: e?.message || "opencode error" });
+          send("debug", { types: [...dbgTypes.entries()], samples: dbgSamples, assistants: [...assistantIds] });
         } finally {
           if (activityTimer) clearTimeout(activityTimer);
           if (textTimer) clearTimeout(textTimer);
