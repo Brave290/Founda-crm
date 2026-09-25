@@ -36,13 +36,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="orb orb-1" />
-
       <div className="w-full max-w-sm relative z-10 animate-scale-in">
         {/* Header */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <span className="font-semibold text-lg text-white tracking-tight">Founda</span>
+            <span className="font-semibold text-lg gradient-text tracking-tight">Founda</span>
             <span className="text-sm text-zinc-600">CRM</span>
           </Link>
           <h1 className="text-2xl font-semibold mb-1.5 text-white">Welcome back</h1>
@@ -50,7 +48,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="animate-fade-up stagger-1">
               <label className="block text-[13px] text-zinc-400 mb-1.5">Email</label>
@@ -88,7 +86,7 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="h-3.5 w-3.5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Signing in…
                 </span>
               ) : (
@@ -104,7 +102,7 @@ export default function LoginPage() {
           </div>
 
           <button onClick={handleGuest}
-            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] transition-all animate-fade-up stagger-4">
+            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/10 hover:bg-violet-500/[0.1] hover:border-violet-400/40 transition-all animate-fade-up stagger-4">
             Continue as guest
           </button>
           <p className="text-[11px] text-zinc-700 text-center mt-2.5">
@@ -114,7 +112,7 @@ export default function LoginPage() {
 
         <p className="text-center text-[13px] text-zinc-500 mt-5 animate-fade-up stagger-5">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-white hover:text-zinc-300 font-medium">
+          <Link href="/register" className="text-violet-300 hover:text-violet-200 font-medium">
             Create one free
           </Link>
         </p>

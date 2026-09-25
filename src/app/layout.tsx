@@ -29,7 +29,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#09090b",
+  themeColor: "#0a0918",
   colorScheme: "dark",
 };
 
@@ -40,7 +40,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#09090b] text-zinc-100 antialiased">
+      <body className="bg-[#0a0918] text-zinc-100 antialiased">
+        <div className="orb orb-1" aria-hidden />
+        <div className="orb orb-2" aria-hidden />
+        <div className="orb orb-3" aria-hidden />
         {children}
       </body>
     </html>

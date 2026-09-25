@@ -12,7 +12,7 @@ import {
   CodeIcon, BarChartIcon, LockIcon, GithubIcon, ClipboardIcon,
 } from "@/components/icons";
 
-const TILE = "h-11 w-11 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-white";
+const TILE = "h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500/30 to-fuchsia-500/20 border border-violet-400/30 flex items-center justify-center text-violet-200";
 
 export default function Home() {
   const { user, guest, loading, continueAsGuest } = useAuth();
@@ -37,9 +37,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden bg-[#09090b]">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
+    <div className="min-h-screen text-white relative overflow-hidden bg-[#0a0918]">
 
       {/* ── Navigation ── */}
       <nav
@@ -95,7 +93,7 @@ export default function Home() {
           <h1 className="text-[44px] sm:text-6xl md:text-7xl font-semibold leading-[1.05] tracking-tight mb-6 animate-fade-up stagger-1">
             The workspace that
             <br />
-            remembers everything.
+            <span className="gradient-text">remembers everything.</span>
           </h1>
 
           <p className="text-zinc-400 text-lg sm:text-xl max-w-2xl mb-10 leading-relaxed animate-fade-up stagger-2">
@@ -129,17 +127,17 @@ export default function Home() {
           <div className="mt-14 animate-fade-up stagger-5">
             <div className="glass-card !rounded-2xl overflow-hidden text-left !transform-none">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06]">
-                <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
-                <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
-                <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
+                <div className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+                <div className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
                 <div className="ml-3 text-[11px] text-zinc-600">founda — dashboard</div>
               </div>
               <div className="p-5 grid grid-cols-3 gap-4">
                 <div className="col-span-2 space-y-3">
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="h-6 w-6 rounded-md bg-white/10 flex items-center justify-center">
-                        <WrenchIcon size={12} className="text-zinc-300" />
+                      <div className="h-6 w-6 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
+                        <WrenchIcon size={12} />
                       </div>
                       <div className="text-[13px] text-white">Build agent</div>
                       <div className="ml-auto text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">FREE</div>
@@ -149,24 +147,24 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center gap-3">
-                    <div className="h-6 w-6 rounded-md bg-white/10 flex items-center justify-center text-[10px] font-medium text-zinc-300">Y</div>
+                    <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[10px] font-semibold text-white">Y</div>
                     <div className="text-[13px] text-zinc-400">Refactor the auth module and add tests</div>
                   </div>
                   <div className="flex items-center gap-2 px-2">
                     <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[13px] text-zinc-600">
                       Message Build…
                     </div>
-                    <div className="h-8 w-8 rounded-xl bg-white flex items-center justify-center">
-                      <PlayIcon size={12} className="text-black" />
+                    <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-600/35">
+                      <PlayIcon size={12} className="text-white" />
                     </div>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="text-[11px] text-zinc-600 mb-2">Daily usage</div>
-                    <div className="text-xl font-semibold text-white">12/50</div>
+                    <div className="text-xl font-semibold text-white">12 / 1M</div>
                     <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
-                      <div className="h-full w-1/4 bg-white/70 rounded-full" />
+                      <div className="h-full w-1/4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full" />
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -253,7 +251,7 @@ export default function Home() {
           ].map((f, i) => (
             <div
               key={f.title}
-              className={`bg-[#09090b] p-6 animate-fade-up stagger-${(i % 6) + 1} hover:bg-white/[0.02] transition-colors`}
+              className={`bg-white/[0.03] p-6 animate-fade-up stagger-${(i % 6) + 1} hover:bg-violet-500/[0.07] transition-colors`}
             >
               <div className={`${TILE} mb-4`}>{f.icon}</div>
               <h3 className="font-medium text-white mb-2 text-[15px]">{f.title}</h3>
@@ -388,9 +386,9 @@ export default function Home() {
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-3">
                     <div className="text-[10px] text-zinc-600 mb-1">Daily usage</div>
-                    <div className="text-lg font-semibold text-white">12 / 50</div>
+                    <div className="text-lg font-semibold text-white">12 / 1M</div>
                     <div className="h-1.5 bg-white/10 rounded-full mt-1.5 overflow-hidden">
-                      <div className="h-full w-1/4 bg-white/70 rounded-full" />
+                      <div className="h-full w-1/4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -415,8 +413,8 @@ export default function Home() {
                   </div>
                   <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 flex items-center gap-2">
                     <div className="flex-1 text-[10px] text-zinc-600">Message…</div>
-                    <div className="h-5 w-5 rounded-md bg-white flex items-center justify-center">
-                      <ArrowRightIcon size={10} className="text-black" />
+                    <div className="h-5 w-5 rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+                      <ArrowRightIcon size={10} className="text-white" />
                     </div>
                   </div>
                 </div>
@@ -431,12 +429,12 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-14 grid grid-cols-2 md:grid-cols-4 gap-6">
           {[
             { value: "4", label: "Free agents", icon: <BotIcon size={18} /> },
-            { value: "50", label: "Messages / day", icon: <BarChartIcon size={18} /> },
+            { value: "1M", label: "Messages / day", icon: <BarChartIcon size={18} /> },
             { value: "∞", label: "Session storage", icon: <DatabaseIcon size={18} /> },
             { value: "0", label: "API keys required", icon: <KeyIcon size={18} /> },
           ].map((stat) => (
             <div key={stat.label} className="text-center">
-              <div className="flex justify-center mb-3 text-zinc-500">{stat.icon}</div>
+              <div className="flex justify-center mb-3 text-violet-400">{stat.icon}</div>
               <div className="text-3xl font-semibold tracking-tight text-white mb-1">{stat.value}</div>
               <div className="text-[13px] text-zinc-500">{stat.label}</div>
             </div>
@@ -446,7 +444,7 @@ export default function Home() {
 
       {/* ── CTA ── */}
       <section className="relative z-10 max-w-3xl mx-auto px-6 py-24 text-center">
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-10 sm:p-14">
+        <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-b from-violet-500/[0.1] to-fuchsia-500/[0.04] p-10 sm:p-14 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
           <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
             Ready to start building?
           </h2>

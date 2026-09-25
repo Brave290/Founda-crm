@@ -13,7 +13,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2500,
-      backgroundColor: "#09090b",
+      backgroundColor: "#0a0918",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
       splashFullScreen: true,
@@ -26,12 +26,12 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: "#09090b",
+    backgroundColor: "#0a0918",
   },
   ios: {
     contentInset: "automatic",
     scheme: "App",
-    backgroundColor: "#09090b",
+    backgroundColor: "#0a0918",
   },
 };
 

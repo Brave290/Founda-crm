@@ -41,10 +41,9 @@ export default function RegisterPage() {
   if (needsConfirm) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-        <div className="orb orb-1" />
         <div className="w-full max-w-sm relative z-10 text-center animate-scale-in">
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-8">
-            <div className="h-12 w-12 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center mx-auto mb-4 text-zinc-300">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-8 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-fuchsia-500/30">
               <MailIcon size={22} />
             </div>
             <h1 className="text-xl font-semibold mb-2 text-white">Check your email</h1>
@@ -63,19 +62,17 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="orb orb-1" />
-
       <div className="w-full max-w-sm relative z-10 animate-scale-in">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <span className="font-semibold text-lg text-white tracking-tight">Founda</span>
+            <span className="font-semibold text-lg gradient-text tracking-tight">Founda</span>
             <span className="text-sm text-zinc-600">CRM</span>
           </Link>
           <h1 className="text-2xl font-semibold mb-1.5 text-white">Create account</h1>
           <p className="text-zinc-500 text-sm">Persistent memory for your AI sessions</p>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl shadow-2xl shadow-violet-950/50">
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="animate-fade-up stagger-1">
               <label className="block text-[13px] text-zinc-400 mb-1.5">Full name</label>
@@ -124,7 +121,7 @@ export default function RegisterPage() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="h-3.5 w-3.5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Creating account…
                 </span>
               ) : (
@@ -140,19 +137,19 @@ export default function RegisterPage() {
           </div>
 
           <button onClick={handleGuest}
-            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/[0.08] hover:bg-white/[0.04] transition-all animate-fade-up stagger-5">
+            className="w-full py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/10 hover:bg-violet-500/[0.1] hover:border-violet-400/40 transition-all animate-fade-up stagger-5">
             Try without account
           </button>
 
           <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-zinc-600">
-            <span className="flex items-center gap-1"><CheckCircleIcon size={11} /> No email confirmation</span>
-            <span className="flex items-center gap-1"><CheckCircleIcon size={11} /> Free forever</span>
+            <span className="flex items-center gap-1 text-emerald-500/90"><CheckCircleIcon size={11} /> No email confirmation</span>
+            <span className="flex items-center gap-1 text-emerald-500/90"><CheckCircleIcon size={11} /> Free forever</span>
           </div>
         </div>
 
         <p className="text-center text-[13px] text-zinc-500 mt-5 animate-fade-up stagger-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-white hover:text-zinc-300 font-medium">
+          <Link href="/login" className="text-violet-300 hover:text-violet-200 font-medium">
             Sign in
           </Link>
         </p>

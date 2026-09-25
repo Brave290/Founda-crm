@@ -20,10 +20,10 @@ interface Message {
 }
 
 const AGENTS = [
-  { id: "build", name: "Build", icon: <WrenchIcon size={15} /> },
-  { id: "plan", name: "Plan", icon: <ClipboardIcon size={15} /> },
-  { id: "general", name: "General", icon: <MessageIcon size={15} /> },
-  { id: "explore", name: "Explore", icon: <SearchIcon size={15} /> },
+  { id: "build", name: "Build", icon: <WrenchIcon size={15} />, grad: "from-emerald-500 to-teal-600", dot: "bg-emerald-400", ring: "text-emerald-400", border: "border-l-emerald-400/70" },
+  { id: "plan", name: "Plan", icon: <ClipboardIcon size={15} />, grad: "from-amber-500 to-orange-600", dot: "bg-amber-400", ring: "text-amber-400", border: "border-l-amber-400/70" },
+  { id: "general", name: "General", icon: <MessageIcon size={15} />, grad: "from-sky-500 to-blue-600", dot: "bg-sky-400", ring: "text-sky-400", border: "border-l-sky-400/70" },
+  { id: "explore", name: "Explore", icon: <SearchIcon size={15} />, grad: "from-fuchsia-500 to-pink-600", dot: "bg-fuchsia-400", ring: "text-fuchsia-400", border: "border-l-fuchsia-400/70" },
 ];
 
 const SUGGESTIONS = [
@@ -245,11 +245,10 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
-      <div className="orb orb-1" style={{ opacity: 0.5 }} />
       <Toaster />
 
       {/* Header */}
-      <header className="glass-strong border-b border-white/10 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 relative z-20">
+      <header className="glass-strong hairline-b px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 relative z-20">
         <div className="flex items-center gap-2">
           <button onClick={() => router.push("/dashboard")}
             className="glass-btn p-2 rounded-lg text-zinc-400 hover:text-white" title="Back">
@@ -257,7 +256,7 @@ export default function ChatPage() {
           </button>
           <div className="hidden sm:block min-w-0">
             <div className="text-[13px] font-medium text-white truncate max-w-[280px]">
-              {messages.length > 0 && messages[0].content ? messages[0].content.slice(0, 40) + "…" : "New chat"}
+              {messages.length > 0 && messages[0].content ? messages[0].content.slice(0, 40) + "…" : <span className="gradient-text font-semibold">New chat</span>}
             </div>
             <div className="text-[10px] text-zinc-600">{messages.length} messages</div>
           </div>
@@ -268,25 +267,28 @@ export default function ChatPage() {
           <div className="relative">
             <button onClick={() => setShowAgentPicker(!showAgentPicker)}
               className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white">
+              <span className={`h-2 w-2 rounded-full ${activeAgentMeta?.dot || "bg-violet-400"} shadow-[0_0_8px_currentColor]`} />
               {activeAgentMeta?.icon}
               <span className="hidden sm:inline">{activeAgentMeta?.name}</span>
               <ChevronDownIcon size={12} className="text-zinc-500" />
             </button>
             {showAgentPicker && (
-              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#0e0e10] shadow-2xl z-50 py-1.5 animate-scale-in overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#121022]/95 backdrop-blur-xl shadow-2xl shadow-violet-950/50 z-50 py-1.5 animate-scale-in overflow-hidden">
                 <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-zinc-600">Free agents</div>
                 {AGENTS.map((a) => (
                   <button key={a.id}
                     onClick={() => { setActiveAgent(a.id); setShowAgentPicker(false); }}
-                    className={`w-full text-left px-4 py-2 hover:bg-white/[0.05] flex items-center gap-3 transition-colors ${
-                      activeAgent === a.id ? "text-white" : "text-zinc-400"
+                    className={`w-full text-left px-4 py-2 hover:bg-violet-500/10 flex items-center gap-3 transition-colors ${
+                      activeAgent === a.id ? "text-white bg-violet-500/[0.08]" : "text-zinc-400"
                     }`}>
-                    {a.icon}
+                    <span className={`h-6 w-6 rounded-md bg-gradient-to-br ${a.grad} flex items-center justify-center text-white shrink-0`}>
+                      {a.icon}
+                    </span>
                     <div>
                       <div className="text-[13px] font-medium">{a.name}</div>
                       <div className="text-[10px] text-zinc-600">{a.id}</div>
                     </div>
-                    {activeAgent === a.id && <CheckIcon size={13} className="ml-auto text-white" />}
+                    {activeAgent === a.id && <CheckIcon size={13} className="ml-auto text-violet-400" />}
                   </button>
                 ))}
               </div>
@@ -311,8 +313,8 @@ export default function ChatPage() {
 
       {/* Limit banner */}
       {limitReached && (
-        <div className="bg-white/[0.04] border-b border-white/10 px-4 py-2.5 text-[13px] text-zinc-300 flex items-center justify-center gap-2 animate-fade-in">
-          <AlertIcon size={13} className="text-zinc-500" />
+        <div className="bg-amber-500/[0.08] border-b border-amber-500/20 px-4 py-2.5 text-[13px] text-amber-200 flex items-center justify-center gap-2 animate-fade-in">
+          <AlertIcon size={13} className="text-amber-400" />
           Daily message limit reached. Resets at midnight.
           <Link href="/register" className="underline text-white">Upgrade</Link>
         </div>
@@ -323,17 +325,17 @@ export default function ChatPage() {
         <div className="max-w-3xl mx-auto px-4 py-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-up">
-              <div className="h-14 w-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center mb-5 text-zinc-400">
+              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 shadow-lg shadow-fuchsia-500/30 flex items-center justify-center mb-5 text-white">
                 <BotIcon size={24} />
               </div>
-              <h2 className="text-xl font-semibold mb-2 text-white">What can I help with?</h2>
+              <h2 className="text-xl font-semibold mb-2 gradient-text">What can I help with?</h2>
               <p className="text-zinc-500 text-sm mb-8 max-w-md">
                 Chat with your free opencode agent. Voice input, images, and persistent memory available.
               </p>
               <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl w-full">
                 {SUGGESTIONS.map((s, i) => (
                   <button key={s} onClick={() => setInput(s)}
-                    className={`rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] p-3.5 text-left text-[13px] text-zinc-400 hover:text-white transition-colors animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
+                    className={`rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-violet-500/[0.08] hover:border-violet-400/40 hover:shadow-lg hover:shadow-violet-500/10 p-3.5 text-left text-[13px] text-zinc-400 hover:text-white transition-all animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
                     {s}
                   </button>
                 ))}
@@ -344,36 +346,36 @@ export default function ChatPage() {
           {messages.map((msg, i) => (
             <div key={i} className="mb-5 group animate-message-in">
               <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center ${
+                <div className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-semibold ${
                   msg.role === "user"
-                    ? "bg-white text-black text-[10px] font-semibold"
-                    : "border border-white/10 bg-white/[0.05] text-zinc-400"
+                    ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-600/30"
+                    : `bg-gradient-to-br ${activeAgentMeta?.grad || "from-teal-500 to-emerald-600"} text-white shadow-md`
                 }`}>
                   {msg.role === "user" ? "You" : <BotIcon size={14} />}
                 </div>
 
                 <div className={`flex-1 min-w-0 ${msg.role === "user" ? "flex justify-end" : ""}`}>
-                  <div className={`inline-block max-w-full rounded-2xl px-4 py-3 ${
+                  <div className={`inline-block max-w-full rounded-2xl px-4 py-3 text-[14px] ${
                     msg.role === "user"
-                      ? "bg-white text-black text-[14px]"
-                      : "border border-white/[0.08] bg-white/[0.02] text-zinc-200"
+                      ? "msg-user"
+                      : `msg-bot border-l-2 ${activeAgentMeta?.border || "border-l-teal-400/70"}`
                   }`}>
-                    {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-lg mb-2 border border-white/10" />}
+                    {msg.image && <img src={msg.image} alt="attached" className="max-w-xs rounded-lg mb-2 border border-white/15" />}
                     <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
                   </div>
 
                   {msg.role === "assistant" && (
                     <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <button onClick={() => copyMsg(msg.content, i)}
-                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Copy">
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-violet-300 hover:bg-violet-500/10 transition-colors" title="Copy">
                         {copiedIdx === i ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
                       </button>
                       <button onClick={regenerate} disabled={sending}
-                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30" title="Regenerate">
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-violet-300 hover:bg-violet-500/10 transition-colors disabled:opacity-30" title="Regenerate">
                         <RefreshIcon size={13} />
                       </button>
                       <button onClick={() => copyMsg(msg.content, i)}
-                        className="p-1.5 rounded-md text-zinc-600 hover:text-white hover:bg-white/5 transition-colors" title="Good response">
+                        className="p-1.5 rounded-md text-zinc-600 hover:text-fuchsia-300 hover:bg-fuchsia-500/10 transition-colors" title="Good response">
                         <ThumbsUpIcon size={13} />
                       </button>
                     </div>
@@ -385,14 +387,14 @@ export default function ChatPage() {
 
           {sending && (
             <div className="flex gap-3 mb-5 animate-message-in">
-              <div className="shrink-0 h-7 w-7 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center text-zinc-400">
+              <div className={`shrink-0 h-7 w-7 rounded-lg bg-gradient-to-br ${activeAgentMeta?.grad || "from-teal-500 to-emerald-600"} flex items-center justify-center text-white shadow-md`}>
                 <BotIcon size={14} />
               </div>
-              <div className="border border-white/[0.08] bg-white/[0.02] rounded-2xl px-4 py-3.5">
+              <div className="msg-bot rounded-2xl px-4 py-3.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
-                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
-                  <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-violet-400 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-fuchsia-400 rounded-full typing-dot" />
+                  <div className="w-1.5 h-1.5 bg-sky-400 rounded-full typing-dot" />
                 </div>
               </div>
             </div>
@@ -402,19 +404,19 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/[0.08] bg-[#09090b]/95 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
+      <div className="border-t border-white/[0.08] bg-[#0a0918]/90 backdrop-blur-xl px-4 py-3 shrink-0 relative z-10">
         <div className="max-w-3xl mx-auto">
           {attachedImage && (
             <div className="mb-2 relative inline-block animate-scale-in">
-              <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-white/10" />
+              <img src={attachedImage} alt="preview" className="h-20 rounded-xl border border-violet-400/30 shadow-lg shadow-violet-600/20" />
               <button onClick={() => setAttachedImage(null)}
-                className="absolute -top-2 -right-2 h-5 w-5 bg-white text-black rounded-full flex items-center justify-center text-xs hover:bg-zinc-200 transition-colors font-medium">×</button>
+                className="absolute -top-2 -right-2 h-5 w-5 bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white rounded-full flex items-center justify-center text-xs hover:brightness-110 transition font-medium">×</button>
             </div>
           )}
 
-          <div className="glass-input flex items-end gap-2 rounded-2xl px-3 py-2 focus-within:border-white/25">
+          <div className="glass-input flex items-end gap-2 rounded-2xl px-3 py-2 focus-within:border-violet-400/50 focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.15),0_0_28px_rgba(139,92,246,0.18)]">
             <button onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors shrink-0" title="Upload image">
+              className="p-2 rounded-lg text-zinc-500 hover:text-fuchsia-300 transition-colors shrink-0" title="Upload image">
               <ImageIcon size={18} />
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
@@ -427,17 +429,17 @@ export default function ChatPage() {
 
             <button onClick={toggleVoice}
               className={`p-2 rounded-lg transition-all shrink-0 ${
-                isRecording ? "bg-red-500/15 text-red-400 animate-pulse" : "text-zinc-500 hover:text-white"
+                isRecording ? "bg-red-500/15 text-red-400 animate-pulse" : "text-zinc-500 hover:text-sky-300"
               }`} title="Voice input">
               <MicIcon size={18} />
             </button>
 
             <button onClick={sendMessage}
               disabled={sending || (!input.trim() && !attachedImage) || limitReached}
-              className={`p-2 rounded-lg transition-all shrink-0 ${
+              className={`p-2.5 rounded-xl transition-all shrink-0 ${
                 sending || (!input.trim() && !attachedImage) || limitReached
                   ? "bg-white/[0.06] text-zinc-700"
-                  : "bg-white text-black hover:bg-zinc-200"
+                  : "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-600/35 hover:brightness-110 hover:shadow-fuchsia-500/40 active:scale-95"
               }`} title="Send (Enter)">
               <SendIcon size={17} />
             </button>
@@ -448,7 +450,7 @@ export default function ChatPage() {
               {isRecording ? <span className="text-red-400 animate-pulse">Recording…</span> :
                 <>Enter to send · Shift+Enter newline{voiceSupported && " · voice input available"}</>}
             </div>
-            <div className="text-[10px] text-zinc-700">Powered by opencode</div>
+            <div className="text-[10px] gradient-text font-medium">Powered by opencode</div>
           </div>
         </div>
       </div>

@@ -46,7 +46,6 @@ export default function DashboardPage() {
   if (!mounted || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-        <div className="orb orb-1" />
         <div className="flex flex-col items-center gap-3 z-10">
           <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <div className="text-zinc-500 text-sm">Loading…</div>
@@ -108,14 +107,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <div className="orb orb-1" />
       <Toaster />
 
       {/* Header */}
-      <header className="relative z-20 glass-strong border-b border-white/10">
+      <header className="relative z-20 glass-strong hairline-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="font-semibold tracking-tight text-[15px] text-white">Founda</span>
+            <span className="font-semibold tracking-tight text-[15px] gradient-text">Founda</span>
             <span className="text-[13px] text-zinc-600 hidden sm:inline">CRM</span>
           </Link>
 
@@ -136,7 +134,7 @@ export default function DashboardPage() {
             {/* User */}
             {user ? (
               <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-[11px] font-medium text-zinc-300">
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-[11px] font-semibold text-white shadow-md shadow-violet-600/30">
                   {user.email?.[0]?.toUpperCase() || "?"}
                 </div>
                 <button onClick={() => { logout(); router.push("/"); }}
@@ -156,10 +154,10 @@ export default function DashboardPage() {
 
       {/* Guest banner */}
       {guest && !user && (
-        <div className="relative z-10 bg-white/[0.03] border-b border-white/[0.08] px-4 py-2.5 flex items-center justify-center gap-3 text-sm animate-fade-in">
+        <div className="relative z-10 bg-gradient-to-r from-violet-500/[0.08] to-fuchsia-500/[0.05] border-b border-violet-500/15 px-4 py-2.5 flex items-center justify-center gap-3 text-sm animate-fade-in">
           <GhostIcon size={14} className="text-zinc-400" />
           <span className="text-zinc-400">Guest mode — chats are not saved permanently.</span>
-          <Link href="/register" className="text-white hover:text-zinc-300 font-medium underline underline-offset-2 text-[13px]">
+          <Link href="/register" className="text-violet-300 hover:text-violet-200 font-medium underline underline-offset-2 text-[13px]">
             Create account to save
           </Link>
         </div>
@@ -172,8 +170,8 @@ export default function DashboardPage() {
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium rounded-t-lg transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "text-white bg-white/[0.06] border-b-2 border-white -mb-px"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  ? "text-white bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 border-b-2 border-violet-400 -mb-px shadow-[0_4px_16px_rgba(139,92,246,0.18)]"
+                  : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
               }`}>
               {tab.icon}
               {tab.label}
@@ -277,9 +275,9 @@ function ChatsTab({ user, guest, guestSessions, setGuestSessions, onNewChat, toa
       <div className="space-y-2">
         {guestSessions.length === 0 && (
           <div className="text-center py-16 glass-card">
-            <ChatIcon size={28} className="mx-auto mb-3 text-zinc-600" />
+            <ChatIcon size={28} className="mx-auto mb-3 text-violet-400" />
             <p className="text-zinc-400 mb-1 text-sm">No chats yet.</p>
-            <p className="text-[13px] text-zinc-600">Start a new chat to begin.</p>
+            <p className="text-[13px] text-zinc-500">Start a new chat to begin.</p>
           </div>
         )}
         {guestSessions.map((session: GuestSession, i: number) => (
@@ -312,10 +310,10 @@ function AgentsTab() {
   const [loading, setLoading] = useState(true);
 
   const FALLBACK_AGENTS = [
-    { id: "build", name: "Build", icon: <WrenchIcon size={20} />, desc: "Writes, edits, and builds code" },
-    { id: "plan", name: "Plan", icon: <ClipboardIcon size={20} />, desc: "Read-only analysis and planning" },
-    { id: "general", name: "General", icon: <MessageIcon size={20} />, desc: "General-purpose assistant" },
-    { id: "explore", name: "Explore", icon: <SearchIcon size={20} />, desc: "Codebase search and discovery" },
+    { id: "build", name: "Build", icon: <WrenchIcon size={20} />, desc: "Writes, edits, and builds code", grad: "from-emerald-500 to-teal-600" },
+    { id: "plan", name: "Plan", icon: <ClipboardIcon size={20} />, desc: "Read-only analysis and planning", grad: "from-amber-500 to-orange-600" },
+    { id: "general", name: "General", icon: <MessageIcon size={20} />, desc: "General-purpose assistant", grad: "from-sky-500 to-blue-600" },
+    { id: "explore", name: "Explore", icon: <SearchIcon size={20} />, desc: "Codebase search and discovery", grad: "from-fuchsia-500 to-pink-600" },
   ];
 
   useEffect(() => {
@@ -325,8 +323,14 @@ function AgentsTab() {
     }).catch(() => setLoading(false));
   }, []);
 
+  const AGENT_GRADS: Record<string, string> = {
+    build: "from-emerald-500 to-teal-600",
+    plan: "from-amber-500 to-orange-600",
+    general: "from-sky-500 to-blue-600",
+    explore: "from-fuchsia-500 to-pink-600",
+  };
   const displayAgents = agents.length > 0
-    ? agents.map((a: any) => ({ ...a, icon: <BotIcon size={20} /> }))
+    ? agents.map((a: any) => ({ ...a, icon: <BotIcon size={20} />, grad: AGENT_GRADS[a.id] || "from-violet-500 to-fuchsia-500" }))
     : FALLBACK_AGENTS;
 
   return (
@@ -338,7 +342,7 @@ function AgentsTab() {
         {displayAgents.map((agent: any, i: number) => (
           <div key={agent.id} className={`glass-card p-5 !transform-none animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
             <div className="flex items-center justify-between mb-3">
-              <div className="h-9 w-9 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-300">
+              <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${agent.grad} flex items-center justify-center text-white shadow-md`}>
                 {agent.icon}
               </div>
               <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium">
@@ -410,17 +414,17 @@ function McpTab() {
       {/* Quick presets */}
       <div className="grid sm:grid-cols-3 gap-3 mb-5">
         {[
-          { name: "github", cmd: "npx -y @modelcontextprotocol/server-github", icon: <GithubIcon size={17} /> },
+          { name: "github", cmd: "npx -y @modelcontextprotocol/server-github", icon: <GithubIcon size={17} /> }, // git hub preset
           { name: "filesystem", cmd: "npx -y @modelcontextprotocol/server-filesystem /workspace", icon: <FolderIcon size={17} /> },
           { name: "web-search", cmd: "npx -y @modelcontextprotocol/server-brave-search", icon: <GlobeIcon size={17} /> },
         ].map((p) => (
           <button key={p.name} onClick={() => { setName(p.name); setCommand(p.cmd); setShowAdd(true); }}
             className="glass-card p-4 text-left !transform-none hover:bg-white/[0.04]">
-            <div className="h-8 w-8 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-400 mb-2.5">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500/70 to-fuchsia-500/70 border border-white/10 flex items-center justify-center text-white mb-2.5 shadow-md">
               {p.icon}
             </div>
             <div className="text-[13px] font-medium text-white">{p.name}</div>
-            <div className="text-[10px] text-zinc-600 font-mono truncate mt-0.5">{p.cmd}</div>
+            <div className="text-[10px] text-zinc-500 font-mono truncate mt-0.5">{p.cmd}</div>
           </button>
         ))}
       </div>
@@ -477,7 +481,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
       {/* Account */}
       <div className="glass-card p-6 !transform-none animate-fade-up">
         <h3 className="font-medium text-white mb-4 flex items-center gap-2 text-sm">
-          <UserIcon size={15} className="text-zinc-400" /> Account
+          <UserIcon size={15} className="text-violet-400" /> Account
         </h3>
         {user ? (
           <div className="space-y-3">
@@ -513,7 +517,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
       {/* opencode engine */}
       <div className="glass-card p-6 !transform-none animate-fade-up stagger-2">
         <h3 className="font-medium text-white mb-4 flex items-center gap-2 text-sm">
-          <ZapIcon size={15} className="text-zinc-400" /> opencode engine
+          <ZapIcon size={15} className="text-sky-400" /> opencode engine
         </h3>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -537,7 +541,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
             )}
           </div>
         </div>
-        <code className="text-[11px] text-zinc-600 font-mono block bg-black/40 border border-white/[0.06] rounded-lg p-2.5">
+        <code className="text-[11px] text-violet-200/80 font-mono block bg-violet-500/10 border border-violet-500/20 rounded-lg p-2.5">
           curl -fsSL https://opencode.ai/install | bash
         </code>
       </div>
@@ -545,7 +549,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
       {/* External API keys */}
       <div className="glass-card p-6 !transform-none animate-fade-up stagger-3">
         <h3 className="font-medium text-white mb-1 flex items-center gap-2 text-sm">
-          <KeyIcon size={15} className="text-zinc-400" /> External API keys
+          <KeyIcon size={15} className="text-fuchsia-400" /> External API keys
         </h3>
         <p className="text-xs text-zinc-500 mb-4">Optional — connect paid providers. Free agents work without keys.</p>
         <div className="space-y-2">
@@ -575,7 +579,7 @@ function SettingsTab({ user, guest, onLogout }: any) {
       {guest && !user && (
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 animate-fade-up stagger-4">
           <h3 className="font-medium text-white mb-2 flex items-center gap-2 text-sm">
-            <AlertIcon size={15} className="text-zinc-400" /> Guest data
+            <AlertIcon size={15} className="text-amber-400" /> Guest data
           </h3>
           <p className="text-xs text-zinc-500 mb-4">Your guest chats live in this browser only. Clearing site data removes them.</p>
           <button onClick={() => { localStorage.removeItem("founda_guest_sessions"); toast("Local chats cleared", "success"); }}

@@ -117,13 +117,13 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 flex items-center gap-2.5 text-xs">
+      <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.08] px-3 py-1.5 flex items-center gap-2.5 text-xs backdrop-blur-md">
         <div className="flex items-center gap-1.5">
           <div className={`h-1.5 w-1.5 rounded-full ${isCritical ? "bg-red-400" : isLow ? "bg-amber-400" : "bg-emerald-400"}`} />
           <span className="text-zinc-400 font-mono">{usage.messagesUsed}/{usage.dailyLimit}</span>
         </div>
         <div className="h-1 w-14 bg-white/10 rounded-full overflow-hidden hidden sm:block">
-          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500" : isLow ? "bg-amber-500" : "bg-white/70"}`}
+          <div className={`h-full rounded-full transition-all duration-500 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
         <span className="text-zinc-600 font-mono text-[11px]">
@@ -134,10 +134,10 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 animate-fade-up">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 animate-fade-up shadow-xl shadow-violet-950/40">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-white text-sm">Usage</h3>
-        <div className="text-[11px] text-zinc-500 font-mono bg-white/[0.04] border border-white/[0.06] px-2 py-1 rounded-md">
+        <h3 className="font-semibold text-sm gradient-text">Usage</h3>
+        <div className="text-[11px] text-violet-300 font-mono bg-violet-500/10 border border-violet-500/25 px-2 py-1 rounded-md">
           resets {String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}
         </div>
       </div>
@@ -151,7 +151,7 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
           </span>
         </div>
         <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-white/70"}`}
+          <div className={`h-full rounded-full transition-all duration-700 ${isCritical ? "bg-red-500 progress-stripe" : isLow ? "bg-amber-500" : "bg-gradient-to-r from-violet-500 to-fuchsia-500"}`}
             style={{ width: `${msgPct}%` }} />
         </div>
       </div>
@@ -165,24 +165,24 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
           </span>
         </div>
         <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
-          <div className="h-full rounded-full bg-white/50 transition-all duration-700"
+          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-teal-400 transition-all duration-700"
             style={{ width: `${tokPct}%` }} />
         </div>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
-          <div className="text-lg font-semibold text-white">{usage.messagesUsed}</div>
-          <div className="text-[10px] text-zinc-600">Sent</div>
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.07] p-2">
+          <div className="text-lg font-semibold text-violet-300">{usage.messagesUsed}</div>
+          <div className="text-[10px] text-zinc-500">Sent</div>
         </div>
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
-          <div className="text-lg font-semibold text-white">{usage.dailyLimit - usage.messagesUsed}</div>
-          <div className="text-[10px] text-zinc-600">Left</div>
+        <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.07] p-2">
+          <div className="text-lg font-semibold text-fuchsia-300">{usage.dailyLimit - usage.messagesUsed}</div>
+          <div className="text-[10px] text-zinc-500">Left</div>
         </div>
-        <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
-          <div className="text-lg font-semibold text-white">{usage.conversations}</div>
-          <div className="text-[10px] text-zinc-600">Chats</div>
+        <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.07] p-2">
+          <div className="text-lg font-semibold text-sky-300">{usage.conversations}</div>
+          <div className="text-[10px] text-zinc-500">Chats</div>
         </div>
       </div>
 
@@ -209,7 +209,7 @@ export function useToast() {
   const Toaster = () => (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast-in rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl border bg-[#111113] ${
+        <div key={t.id} className={`toast-in rounded-xl px-4 py-3 text-sm flex items-center gap-3 shadow-2xl border bg-[#121022]/95 backdrop-blur-xl ${
           t.type === "success" ? "border-emerald-500/25" : t.type === "error" ? "border-red-500/25" : "border-white/10"
         }`}>
           <span className={
