@@ -70,6 +70,8 @@ export default function ChatPage() {
   const [model, setModel] = useState<string>("");
   const [cmdIdx, setCmdIdx] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [modelList, setModelList] = useState<any[]>([]);
+  const [showModelPicker, setShowModelPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +109,20 @@ export default function ChatPage() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((d) => setModelList(Array.isArray(d.models) ? d.models : []))
+      .catch(() => {});
+    import("@/lib/store")
+      .then(async (store) => {
+        await store.ready();
+        const m = store.getPrefs().model;
+        if (typeof m === "string" && m) setModel(m);
+      })
+      .catch(() => {});
   }, []);
 
   // Load messages (server-backed store for guests — hydrate first)
@@ -217,6 +233,7 @@ export default function ChatPage() {
     if (cmd === "/model") {
       if (!arg) { toast(model ? `Current: ${model}` : "Using default model. Usage: /model pollinations/openai-fast", "success"); return; }
       setModel(arg);
+      import("@/lib/store").then((st) => st.savePrefs({ model: arg })).catch(() => {});
       toast(`Model set to ${arg}`, "success");
       return;
     }
@@ -365,6 +382,15 @@ export default function ChatPage() {
   }
 
   const activeAgentMeta = AGENTS.find((a) => a.id === activeAgent);
+  const availableModels = modelList.filter((m) => m.available);
+  const activeModelMeta = availableModels.find((m) => m.id === model);
+
+  const pickModel = (id: string) => {
+    setModel(id);
+    setShowModelPicker(false);
+    import("@/lib/store").then((st) => st.savePrefs({ model: id })).catch(() => {});
+    toast(id ? `Model: ${id}` : "Model: auto (default)", "success");
+  };
 
   const paletteActions: PaletteAction[] = [
     { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest ? "?guest=1" : ""}`) },
@@ -433,6 +459,54 @@ export default function ChatPage() {
                     {activeAgent === a.id && <CheckIcon size={13} className="ml-auto text-emerald-400" />}
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Model picker */}
+          <div className="relative">
+            <button onClick={() => setShowModelPicker(!showModelPicker)}
+              className="glass-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white"
+              title="Model">
+              <svg className="w-4 h-4 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5m-4.25-11.396c.251.023.501.05.75.082M5 14.5l-1.455 2.91A2.25 2.25 0 005.318 21H18.68a2.25 2.25 0 001.773-3.59L19 14.5" />
+              </svg>
+              <span className="hidden sm:inline max-w-[140px] truncate text-[12.5px]">
+                {activeModelMeta?.label || (model ? model.split("/").slice(-1)[0] : "Auto model")}
+              </span>
+              <ChevronDownIcon size={12} className="text-slate-500" />
+            </button>
+            {showModelPicker && (
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-white/10 bg-[#101a30]/95 backdrop-blur-xl shadow-2xl shadow-emerald-950/50 z-50 py-1.5 animate-scale-in overflow-hidden max-h-[60vh] overflow-y-auto">
+                <button onClick={() => pickModel("")}
+                  className={`w-full text-left px-4 py-2 hover:bg-emerald-500/10 flex items-center justify-between transition-colors ${!model ? "text-white bg-emerald-500/[0.08]" : "text-slate-400"}`}>
+                  <span className="text-[13px]">Auto (default)</span>
+                  {!model && <CheckIcon size={13} className="text-emerald-400" />}
+                </button>
+                {["keyless", "env", "store"].map((src) => {
+                  const group = availableModels.filter((m) => m.source === src);
+                  if (!group.length) return null;
+                  return (
+                    <div key={src}>
+                      <div className="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-slate-600">
+                        {src === "keyless" ? "Free · no key" : src === "env" ? "Server key" : "Your API keys"}
+                      </div>
+                      {group.map((m) => (
+                        <button key={m.id} onClick={() => pickModel(m.id)}
+                          className={`w-full text-left px-4 py-2 hover:bg-emerald-500/10 flex items-center justify-between transition-colors ${model === m.id ? "text-white bg-emerald-500/[0.08]" : "text-slate-400"}`}>
+                          <div className="min-w-0">
+                            <div className="text-[13px] truncate">{m.label}</div>
+                            <div className="text-[10px] text-slate-600 font-mono truncate">{m.id}</div>
+                          </div>
+                          {model === m.id && <CheckIcon size={13} className="text-emerald-400 shrink-0 ml-2" />}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+                {availableModels.length === 0 && (
+                  <div className="px-4 py-3 text-[12px] text-slate-600">Loading models…</div>
+                )}
               </div>
             )}
           </div>
