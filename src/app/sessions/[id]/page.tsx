@@ -18,6 +18,7 @@ import { SettingsModal } from "@/components/settings-modal";
 import { AgentActivity, type AgentActivityData } from "@/components/agent-activity";
 import { buildAuditPrompt } from "@/lib/skills";
 import { ChatInputDock, COMMANDS, type ChatInputHandle } from "@/components/chat-input";
+import { ImageCard, downloadImage } from "@/components/image-card";
 
 interface Message {
   id?: string;
@@ -804,6 +805,17 @@ export default function ChatPage() {
     sendMessage({ prompt: messages[ui].content, label: messages[ui].content, from: ui });
   };
 
+  const regenerateImage = (idx: number) => {
+    const m = messages[idx];
+    if (!m?.image || String(m.image).startsWith("data:")) return;
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const src = `/api/image?prompt=${encodeURIComponent(String(m.content || "image"))}&width=1024&height=1024&seed=${seed}`;
+    const next = messages.map((x, j) => (j === idx ? { ...x, image: src } : x));
+    setMessages(next);
+    saveMessages(next).catch(() => {});
+    toast("Generating a new variation…", "success");
+  };
+
   if (authLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -1030,9 +1042,22 @@ export default function ChatPage() {
                     : "w-full"
                 }`}>
                   {msg.image && (
-                    <img src={msg.image} alt={msg.content || "generated image"} loading="lazy"
-                      onClick={() => setLightbox(msg.image!)}
-                      className="max-w-xs w-full rounded-lg mb-2 border border-white/10 animate-fade-in cursor-zoom-in hover:opacity-90 transition-opacity" />
+                    <ImageCard
+                      src={msg.image}
+                      alt={msg.content || "generated image"}
+                      prompt={msg.role === "assistant" ? String(msg.content || "").slice(0, 140) : undefined}
+                      onOpen={() => setLightbox(msg.image!)}
+                      {...(msg.role === "assistant"
+                        ? {
+                            onEdit: () => {
+                              inputApiRef.current?.set(`/image ${msg.content}`);
+                              setTimeout(() => inputApiRef.current?.focus(), 40);
+                            },
+                            onRegenerate: () => regenerateImage(i),
+                          }
+                        : {})}
+                      className="max-w-[480px] w-full mb-2 animate-fade-in"
+                    />
                   )}
                   {msg.role === "assistant" && !!msg.metadata?.reasoning && (
                     <>
@@ -1180,11 +1205,22 @@ export default function ChatPage() {
       )}
 
       {lightbox && (
-        <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+        <div className="fixed inset-0 z-[130] bg-black/88 backdrop-blur-md flex flex-col items-center justify-center p-6 cursor-zoom-out"
           onClick={() => setLightbox(null)} role="dialog" aria-label="Image preview">
-          <img src={lightbox} alt="preview" className="max-w-full max-h-full rounded-xl shadow-2xl" />
-          <button onClick={() => setLightbox(null)}
-            className="absolute top-4 right-5 text-slate-400 hover:text-white text-2xl leading-none">×</button>
+          <div className="absolute top-4 right-5 flex items-center gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => downloadImage(lightbox, "founda-image")}
+              className="h-9 px-3.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-xl text-[12.5px] text-white flex items-center gap-1.5 transition-colors shadow-lg">
+              <DownloadIcon size={14} />
+              Download
+            </button>
+            <button onClick={() => { navigator.clipboard?.writeText(lightbox); toast("Link copied", "success"); }}
+              className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-xl text-[12.5px] text-white transition-colors shadow-lg">
+              Copy link
+            </button>
+            <button onClick={() => setLightbox(null)}
+              className="h-9 w-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 backdrop-blur-xl text-slate-300 hover:text-white text-lg leading-none transition-colors shadow-lg">×</button>
+          </div>
+          <img src={lightbox} alt="preview" className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl" />
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CopyIcon, CheckIcon, DownloadIcon } from "@/components/icons";
+import { ImageCard } from "@/components/image-card";
 
 function ensureDoc(html: string): string {
   if (/<html[\s>]/i.test(html)) return html;
@@ -167,11 +168,12 @@ export const Markdown = memo(function Markdown({ content, onImageClick }: { cont
           ),
           hr: () => <hr className="my-4 border-white/10" />,
           img: (p: any) => (
-            <img
-              {...p}
-              loading="lazy"
-              onClick={onImageClick ? (e) => onImageClick((e.currentTarget as HTMLImageElement).src) : undefined}
-              className={`max-w-full rounded-lg border border-white/10 ${onImageClick ? "cursor-zoom-in hover:border-white/25 transition-colors" : ""}`}
+            <ImageCard
+              src={p.src}
+              alt={p.alt || ""}
+              hoverOnly
+              className="max-w-[480px] w-full my-2"
+              {...(onImageClick ? { onOpen: () => onImageClick(p.src) } : {})}
             />
           ),
           table: (p) => (
