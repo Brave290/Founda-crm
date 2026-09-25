@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addMcpServer, getMcpStatus } from "@/lib/opencode";
+import { addMcpServer, disconnectMcpServer, getMcpStatus } from "@/lib/opencode";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,7 +20,11 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case "add": {
         const result = await addMcpServer(name, config);
-        return NextResponse.json({ result });
+        return NextResponse.json({ ok: true, result });
+      }
+      case "disconnect": {
+        await disconnectMcpServer(name);
+        return NextResponse.json({ ok: true });
       }
       case "status": {
         const status = await getMcpStatus();

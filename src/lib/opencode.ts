@@ -460,15 +460,31 @@ export async function getProviders(): Promise<any[]> {
 
 export async function addMcpServer(name: string, config: any): Promise<any> {
   const c = await ensureServer();
-  const res = await c.mcp.add({ name, config });
-  return (res as any)?.data;
+  const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+  const res: any = await c.mcp.add({ name, config, directory });
+  if (res?.error) throw new Error(JSON.stringify(res.error));
+  return res?.data;
+}
+
+export async function disconnectMcpServer(name: string): Promise<any> {
+  const c = await ensureServer();
+  const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+  const res: any = await c.mcp.disconnect({ name, directory });
+  if (res?.error) throw new Error(JSON.stringify(res.error));
+  return res?.data;
 }
 
 export async function getMcpStatus(): Promise<any> {
   try {
     const c = await ensureServer();
-    const res = await c.mcp.status({});
-    return (res as any)?.data || [];
+    const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+    const res = await c.mcp.status({ directory });
+    const data = (res as any)?.data;
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object") {
+      return Object.entries(data).map(([name, v]: [string, any]) => ({ name, ...v }));
+    }
+    return [];
   } catch {
     return [];
   }

@@ -10,7 +10,7 @@ import {
   ChatIcon, BotIcon, ZapIcon, PlugIcon, SettingsIcon, GhostIcon,
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, GithubIcon,
   FolderIcon, GlobeIcon, UserIcon, KeyIcon, AlertIcon, PlusIcon,
-  LogOutIcon, CheckIcon,
+  LogOutIcon, CheckIcon, TrashIcon, CodeIcon,
 } from "@/components/icons";
 
 type Tab = "chats" | "agents" | "usage" | "mcp" | "settings";
@@ -452,28 +452,72 @@ function AgentsTab() {
 function McpTab() {
   const [servers, setServers] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [mode, setMode] = useState<"url" | "command">("url");
   const [name, setName] = useState("");
   const [command, setCommand] = useState("");
+  const [url, setUrl] = useState("");
+  const [headers, setHeaders] = useState("");
+  const [busy, setBusy] = useState(false);
   const { toast, Toaster } = useToast();
 
-  useEffect(() => {
-    fetch("/api/opencode/mcp").then(r => r.json()).then(d => {
-      if (d.servers) setServers(Array.isArray(d.servers) ? d.servers : []);
-    }).catch(() => {});
-  }, []);
+  const refresh = () =>
+    fetch("/api/opencode/mcp")
+      .then((r) => r.json())
+      .then((d) => { if (d.servers) setServers(Array.isArray(d.servers) ? d.servers : []); })
+      .catch(() => {});
+  useEffect(() => { refresh(); }, []);
 
   const addServer = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBusy(true);
+    try {
+      let config: any;
+      let label: string;
+      if (mode === "url") {
+        let hdrs: Record<string, string> | undefined;
+        if (headers.trim()) {
+          try {
+            hdrs = JSON.parse(headers);
+          } catch {
+            toast("Headers must be valid JSON", "error");
+            setBusy(false);
+            return;
+          }
+        }
+        const derived = name.trim() || new URL(url).hostname;
+        label = derived;
+        config = { type: "remote", url: url.trim(), ...(hdrs ? { headers: hdrs } : {}) };
+      } else {
+        label = name.trim();
+        config = { type: "local", command, args: [], env: {} };
+      }
+      const res = await fetch("/api/opencode/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", name: label, config }),
+      });
+      const data = await res.json();
+      if (data.error) toast(data.error, "error");
+      else {
+        toast(`Connected: ${label}`, "success");
+        setName(""); setUrl(""); setHeaders(""); setCommand(""); setShowAdd(false);
+        setTimeout(refresh, 600);
+      }
+    } catch { toast("Failed to add server", "error"); }
+    finally { setBusy(false); }
+  };
+
+  const disconnect = async (n: string) => {
     try {
       const res = await fetch("/api/opencode/mcp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add", name, config: { type: "local", command, args: [], env: {} } }),
+        body: JSON.stringify({ action: "disconnect", name: n }),
       });
       const data = await res.json();
       if (data.error) toast(data.error, "error");
-      else { toast("MCP server added", "success"); setName(""); setCommand(""); setShowAdd(false); }
-    } catch { toast("Failed to add server", "error"); }
+      else { toast(`Disconnected: ${n}`, "success"); setTimeout(refresh, 400); }
+    } catch { toast("Disconnect failed", "error"); }
   };
 
   return (
@@ -482,7 +526,7 @@ function McpTab() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-white">MCP servers</h2>
-          <p className="text-[13px] text-slate-500 mt-0.5">Tools your agents can use</p>
+          <p className="text-[13px] text-slate-500 mt-0.5">Connect via URL (remote) or command (local)</p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)} className="glass-btn-primary px-4 py-2 rounded-lg text-[13px] flex items-center gap-1.5">
           {showAdd ? "Cancel" : <><PlusIcon size={13} /> Add</>}
@@ -490,30 +534,60 @@ function McpTab() {
       </div>
 
       {showAdd && (
-        <form onSubmit={addServer} className="glass-card p-5 mb-5 space-y-3 animate-fade-up">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Server name" required
-            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600" />
-          <input value={command} onChange={(e) => setCommand(e.target.value)}
-            placeholder="Command (e.g. npx -y @modelcontextprotocol/server-github)" required
-            className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white font-mono placeholder-slate-600" />
-          <button type="submit" className="glass-btn-primary px-4 py-2 rounded-lg text-sm">Add server</button>
-        </form>
+        <div className="glass-card p-5 mb-5 space-y-3 animate-fade-up">
+          <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/10 w-fit">
+            {(["url", "command"] as const).map((m) => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`px-4 py-1.5 rounded-lg text-[12.5px] transition-colors ${mode === m ? "bg-emerald-500/15 text-emerald-300 border border-emerald-400/30" : "text-slate-500 border border-transparent"}`}>
+                {m === "url" ? "Link (URL)" : "Command"}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={addServer} className="space-y-3">
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              placeholder={mode === "url" ? "Name (optional — derived from URL)" : "Server name"}
+              className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white placeholder-slate-600" />
+
+            {mode === "url" ? (
+              <>
+                <input value={url} onChange={(e) => setUrl(e.target.value)} type="url" required
+                  placeholder="https://mcp.context7.com/mcp"
+                  className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white font-mono placeholder-slate-600" />
+                <textarea value={headers} onChange={(e) => setHeaders(e.target.value)} rows={2}
+                  placeholder={'Optional headers JSON: {"Authorization": "Bearer …"}'}
+                  className="glass-input w-full px-4 py-2.5 rounded-xl text-[12.5px] text-white font-mono placeholder-slate-600 resize-none" />
+              </>
+            ) : (
+              <input value={command} onChange={(e) => setCommand(e.target.value)}
+                placeholder="Command (e.g. npx -y @modelcontextprotocol/server-github)" required
+                className="glass-input w-full px-4 py-2.5 rounded-xl text-sm text-white font-mono placeholder-slate-600" />
+            )}
+
+            <button type="submit" disabled={busy}
+              className="glass-btn-primary px-4 py-2 rounded-lg text-sm disabled:opacity-50">
+              {busy ? "Connecting…" : "Connect"}
+            </button>
+          </form>
+        </div>
       )}
 
-      {/* Quick presets */}
+      {/* Remote presets */}
+      <div className="text-[10px] uppercase tracking-wider text-slate-600 mb-2">Remote presets (URL)</div>
       <div className="grid sm:grid-cols-3 gap-3 mb-5">
         {[
-          { name: "github", cmd: "npx -y @modelcontextprotocol/server-github", icon: <GithubIcon size={17} /> }, // git hub preset
-          { name: "filesystem", cmd: "npx -y @modelcontextprotocol/server-filesystem /workspace", icon: <FolderIcon size={17} /> },
-          { name: "web-search", cmd: "npx -y @modelcontextprotocol/server-brave-search", icon: <GlobeIcon size={17} /> },
+          { name: "context7", url: "https://mcp.context7.com/mcp", icon: <GlobeIcon size={17} />, desc: "Library docs" },
+          { name: "deepwiki", url: "https://mcp.deepwiki.com/mcp", icon: <CodeIcon size={17} />, desc: "Repo wiki Q&A" },
+          { name: "generic-url", url: "", icon: <PlugIcon size={17} />, desc: "Any MCP endpoint" },
         ].map((p) => (
-          <button key={p.name} onClick={() => { setName(p.name); setCommand(p.cmd); setShowAdd(true); }}
+          <button key={p.name}
+            onClick={() => { setMode("url"); setName(p.name === "generic-url" ? "" : p.name); setUrl(p.url); setShowAdd(true); }}
             className="glass-card p-4 text-left !transform-none hover:bg-white/[0.04]">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500/70 to-teal-500/70 border border-white/10 flex items-center justify-center text-white mb-2.5 shadow-md">
               {p.icon}
             </div>
             <div className="text-[13px] font-medium text-white">{p.name}</div>
-            <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">{p.cmd}</div>
+            <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">{p.url || p.desc}</div>
           </button>
         ))}
       </div>
@@ -521,13 +595,22 @@ function McpTab() {
       <div className="space-y-2">
         {servers.map((s: any, i: number) => (
           <div key={i} className="glass-card p-4 flex items-center justify-between animate-fade-up">
-            <div>
-              <div className="font-medium text-white text-sm">{s.name || s.id}</div>
-              <div className="text-xs text-slate-500">{s.type || "local"}</div>
+            <div className="min-w-0">
+              <div className="font-medium text-white text-sm truncate">{s.name || s.id}</div>
+              <div className="text-xs text-slate-500 font-mono truncate">
+                {s.config?.type === "remote" || s.type === "remote" ? (s.config?.url || s.url || "remote") : (s.config?.command || s.command || s.type || "local")}
+              </div>
             </div>
-            <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
-              <CheckIcon size={10} /> Active
-            </span>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <span className="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                <CheckIcon size={10} /> {s.status || "Active"}
+              </span>
+              <button onClick={() => disconnect(s.name || s.id)}
+                className="p-1.5 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="Disconnect">
+                <TrashIcon size={13} />
+              </button>
+            </div>
           </div>
         ))}
         {servers.length === 0 && <p className="text-slate-600 text-sm text-center py-8">No MCP servers connected.</p>}
