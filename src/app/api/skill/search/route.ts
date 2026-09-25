@@ -60,9 +60,42 @@ export async function POST(req: NextRequest) {
   if (!q)
     return NextResponse.json({ error: "q required", results: [] }, { status: 400 });
 
-  const ua = { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" };
+  const ua = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
 
-  // 1) DuckDuckGo HTML
+  // 1) Bing RSS — direct URLs, clean XML, the only engine that reliably
+  //    answers from Vercel's egress (DDG returns 403 for datacenter IPs).
+  try {
+    const res = await fetchWithRetry(
+      `https://www.bing.com/search?q=${encodeURIComponent(q)}&format=rss&mkt=en-US&count=${count}`,
+      { headers: ua },
+      { timeoutMs: 10_000, retries: 1 }
+    );
+    if (res.ok) {
+      const xml = await res.text();
+      const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+      const results: Result[] = [];
+      for (const item of items.slice(0, count)) {
+        const t = /<title>([\s\S]*?)<\/title>/.exec(item);
+        const l = /<link>([\s\S]*?)<\/link>/.exec(item);
+        const d = /<description>([\s\S]*?)<\/description>/.exec(item);
+        const url = (l?.[1] || "").trim();
+        if (!/^https?:\/\//.test(url)) continue;
+        results.push({
+          title: decode(t?.[1] || url).slice(0, 160),
+          url,
+          snippet: decode(d?.[1] || "").slice(0, 400),
+        });
+      }
+      if (results.length) return NextResponse.json({ query: q, results, source: "bing" });
+    }
+  } catch {
+    /* next */
+  }
+
+  // 2) DuckDuckGo HTML
   try {
     const res = await fetchWithRetry(
       `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`,
@@ -77,7 +110,7 @@ export async function POST(req: NextRequest) {
     /* next */
   }
 
-  // 2) DuckDuckGo Lite
+  // 3) DuckDuckGo Lite
   try {
     const res = await fetchWithRetry(
       `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`,
@@ -92,7 +125,7 @@ export async function POST(req: NextRequest) {
     /* next */
   }
 
-  // 3) DDG Instant Answer (text-only summaries)
+  // 4) DDG Instant Answer (text-only summaries)
   try {
     const res = await fetchWithRetry(
       `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`,
@@ -116,7 +149,7 @@ export async function POST(req: NextRequest) {
     /* next */
   }
 
-  // 4) Wikipedia search — always reachable, real pages + snippets.
+  // 5) Wikipedia search — always reachable, real pages + snippets.
   try {
     const res = await fetchWithRetry(
       `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=${count}&format=json&origin=*`,
