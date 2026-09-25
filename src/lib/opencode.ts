@@ -323,11 +323,8 @@ function engineConfig() {
           apiKey: process.env.POLLINATIONS_API_KEY || "founda-free",
         },
         models: {
-          "openai": { name: "GPT-4.1 mini - free" },
-          "openai-large": { name: "GPT-4.1 - free" },
-          "mistral": { name: "Mistral - free" },
-          "deepseek-reasoning": { name: "DeepSeek Reasoning - free" },
-          "qwen-coder": { name: "Qwen Coder - free" },
+          "openai-fast": { name: "GPT-OSS 20B (fast) - free" },
+          "openai": { name: "GPT-OSS 20B - free" },
         },
       },
     },

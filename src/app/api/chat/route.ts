@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
         content = data.text;
       } else if (data.parts && Array.isArray(data.parts)) {
         content = data.parts
-          .filter((p: any) => p.type === "text" || p.text)
-          .map((p: any) => p.text || p.content || "")
-          .join("\n");
+          .filter((p: any) => p.type === "text" && !p.synthetic)
+          .map((p: any) => p.text || "")
+          .join("");
       } else if (data.content) {
         content =
           typeof data.content === "string"
