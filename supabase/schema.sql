@@ -198,7 +198,9 @@ create policy "Users can create own activity" ON public.activity_log
 
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+set search_path = public, auth
+as $$
 begin
   insert into public.profiles (id, email, display_name)
   values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)));
@@ -213,7 +215,9 @@ create trigger on_auth_user_created
 
 -- Auto-update updated_at
 create or replace function public.update_updated_at()
-returns trigger as $$
+returns trigger
+set search_path = public
+as $$
 begin
   new.updated_at = now();
   return new;
@@ -237,6 +241,9 @@ create index if not EXISTS idx_exports_session ON public.session_exports(session
 create index if not exists idx_mcp_user ON public.mcp_connections(user_id);
 create unique index if not exists idx_mcp_user_name ON public.mcp_connections(user_id, name);
 create index if not exists idx_activity_user ON public.activity_log(user_id, created_at desc);
+create index if not exists idx_activity_log_session ON public.activity_log(session_id);
+create index if not exists idx_repos_user ON public.repos(user_id);
+create index if not exists idx_session_exports_user ON public.session_exports(user_id);
 -- ── Server-side storage for guest devices (keyed by random device id) ──
 create table if not exists public.guest_data (
   device_id uuid primary key,
