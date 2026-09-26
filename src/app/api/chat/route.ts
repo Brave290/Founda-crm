@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureServer, setProviderAuth, listNativeModels } from "@/lib/opencode";
+import { ensureServer, setProviderAuth, listNativeModels, getAvailableAgents } from "@/lib/opencode";
 import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreForRequest } from "@/lib/store-server";
 import { stepFromPart } from "@/lib/agent-activity";
@@ -21,6 +21,7 @@ function splitModel(m: string): { providerID: string; modelID: string } {
 interface ChatOut {
   content: string;
   usedModel: string;
+  usedAgent: string;
   attempts: string[];
   info?: any;
 }
@@ -119,6 +120,29 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
   };
   if (!ocSession) await createSession();
 
+  // A ses_* id from an older serverless instance points at a dead workspace —
+  // the engine answers "Session not found" for it. Validate up front and
+  // recreate (with history replay) instead of failing the whole prompt.
+  if (ocSession) {
+    try {
+      await client.session.get({ sessionID: ocSession, directory });
+    } catch {
+      ocSession = null;
+      replay = true;
+      await createSession();
+    }
+  }
+
+  // Agent failover chain: requested agent first, then every other agent
+  // opencode advertises. A failing agent no longer stops the run — the next
+  // one picks it up with the same model chain.
+  const advertised = await getAvailableAgents().catch(() => [] as any[]);
+  const agentChain: string[] = [];
+  for (const id of [agent, ...advertised.map((a: any) => a.id)]) {
+    if (id && !agentChain.includes(id)) agentChain.push(id);
+  }
+  if (!agentChain.length) agentChain.push("build");
+
   const promptText = () => {
     if (!replay || !hist.length) return prompt;
     const ctx = hist
@@ -127,86 +151,89 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     return `Conversation so far:\n${ctx}\n\nUser: ${prompt}`;
   };
 
-  // Try each model in the chain; any prompt error falls through to the next.
+  // Agent-outer, model-inner: a dead model fails over to the next model;
+  // a dead agent fails over to the next advertised agent. The run only stops
+  // when every agent × model combination is exhausted.
   const runChain = async (parts: any[]) => {
     const attempts: string[] = [];
     let usedModel = chain[0];
+    let usedAgent = agentChain[0];
     let lastError = "unknown error";
-    for (const m of chain) {
-      usedModel = m;
-      attempts.push(m);
-      prep.onAttempt?.();
-      try {
-        await applyKey(m);
-        const promptParams: any = {
-          sessionID: ocSession!,
-          directory,
-          parts,
-          model: splitModel(m),
-        };
-        if (agent) promptParams.agent = agent;
-        const skillsText = deviceId
-          ? skillsWithIdentity.split("${DEVICE_ID}").join(deviceId)
-          : skillsWithIdentity;
-        // Fast mode skips the (large) skills catalog so the first token lands
-        // immediately — identity header note stays so skill APIs still auth.
-        const extras = fastMode
-          ? [
-              "Answer immediately and directly: start writing the final response right away, no preamble, no deliberation.",
-              deviceId ? `Your identity for this app's APIs: send header "x-device-id: ${deviceId}" when calling this app's own API.` : "",
-            ]
-          : [skillsText];
-        const systemAll = [systemPrompt, ...extras].filter(Boolean).join("\n\n");
-        if (systemAll) promptParams.system = systemAll;
+    for (const ag of agentChain) {
+      usedAgent = ag;
+      for (const m of chain) {
+        usedModel = m;
+        attempts.push(`${ag}/${m}`);
+        prep.onAttempt?.();
+        try {
+          await applyKey(m);
+          const promptParams: any = {
+            sessionID: ocSession!,
+            directory,
+            parts,
+            model: splitModel(m),
+            agent: ag,
+          };
+          const skillsText = deviceId
+            ? skillsWithIdentity.split("${DEVICE_ID}").join(deviceId)
+            : skillsWithIdentity;
+          // Fast mode skips the (large) skills catalog so the first token lands
+          // immediately — identity header note stays so skill APIs still auth.
+          const extras = fastMode
+            ? [
+                "Answer immediately and directly: start writing the final response right away, no preamble, no deliberation.",
+                deviceId ? `Your identity for this app's APIs: send header "x-device-id: ${deviceId}" when calling this app's own API.` : "",
+              ]
+            : [skillsText];
+          const systemAll = [systemPrompt, ...extras].filter(Boolean).join("\n\n");
+          if (systemAll) promptParams.system = systemAll;
 
-        // A dead provider must fail over quickly; MiMo remains the next working path.
-        const modelTimeout = fastMode ? 20_000 : 45_000;
-        const promptRace = Promise.race([
-          client.session.prompt(promptParams),
-          new Promise((_res, rej) =>
-            setTimeout(() => rej(new Error(`model timed out after ${modelTimeout / 1000}s`)), modelTimeout)
-          ),
-        ]);
-        const result: any = await promptRace;
-        if (!result?.data) {
-          throw new Error(result?.error ? JSON.stringify(result.error) : "empty result");
-        }
-        const data = result.data;
-        const info = data.info;
-        if (info?.error) {
-          const err: any = info.error;
-          throw new Error(
-            `[${err?.name || "unknown"}] ${err?.data ? JSON.stringify(err.data) : JSON.stringify(err)}`
-          );
-        }
+          // A dead provider must fail over quickly; MiMo remains the next working path.
+          const modelTimeout = fastMode ? 20_000 : 45_000;
+          const promptRace = Promise.race([
+            client.session.prompt(promptParams),
+            new Promise((_res, rej) =>
+              setTimeout(() => rej(new Error(`model timed out after ${modelTimeout / 1000}s`)), modelTimeout)
+            ),
+          ]);
+          const result: any = await promptRace;
+          if (!result?.data) {
+            throw new Error(result?.error ? JSON.stringify(result.error) : "empty result");
+          }
+          const data = result.data;
+          const info = data.info;
+          if (info?.error) {
+            const err: any = info.error;
+            throw new Error(
+              `[${err?.name || "unknown"}] ${err?.data ? JSON.stringify(err.data) : JSON.stringify(err)}`
+            );
+          }
 
-        let content = "";
-        if (typeof data === "string") {
-          content = data;
-        } else if (data.text) {
-          content = data.text;
-        } else if (data.parts && Array.isArray(data.parts)) {
-          content = data.parts
-            .filter((p: any) => p.type === "text" && !p.synthetic)
-            .map((p: any) => p.text || "")
-            .join("");
-        } else if (data.content) {
-          content =
-            typeof data.content === "string"
-              ? data.content
-              : JSON.stringify(data.content);
-        }
+          let content = "";
+          if (typeof data === "string") {
+            content = data;
+          } else if (data.text) {
+            content = data.text;
+          } else if (data.parts && Array.isArray(data.parts)) {
+            content = data.parts
+              .filter((p: any) => p.type === "text" && !p.synthetic)
+              .map((p: any) => p.text || "")
+              .join("");
+          } else if (data.content) {
+            content =
+              typeof data.content === "string"
+                ? data.content
+                : JSON.stringify(data.content);
+          }
 
-        if (content) return { content, usedModel, attempts, info };
-        throw new Error("empty response");
-      } catch (e: any) {
-        lastError = e.message || "model error";
-        if (m === chain[chain.length - 1]) {
-          throw new Error(`model error [${usedModel}]: ${lastError}`);
+          if (content) return { content, usedModel, usedAgent, attempts, info };
+          throw new Error("empty response");
+        } catch (e: any) {
+          lastError = e.message || "model error";
         }
       }
     }
-    throw new Error(`model error [${usedModel}]: ${lastError}`);
+    throw new Error(`agent/model error [${usedAgent}/${usedModel}]: ${lastError}`);
   };
 
   let imageDropped = false;
@@ -218,8 +245,11 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     } catch (e: any) {
       let recovered = false;
       let out: ChatOut | undefined;
-      // Stale ses_* id from a recycled instance → recreate with history replay
-      if (sessionFromClient && !replay) {
+      // Stale ses_* id from a recycled instance → recreate with history replay.
+      // Triggers on any session-not-found failure, even when the client already
+      // asked for replay (the stale id would fail every retry otherwise).
+      const sessionDied = /session not found/i.test(String(e?.message || e?.code || ""));
+      if (sessionFromClient && (!replay || sessionDied)) {
         replay = true;
         try {
           await createSession();
@@ -482,7 +512,8 @@ function streamRun(prep: Prep): Response {
             content: out.content,
             sessionId: prep.ocSession(),
             metadata: {
-              agent: prep.agent || "build",
+              agent: out.usedAgent || prep.agent || "build",
+              requestedAgent: prep.agent || "build",
               model: out.usedModel,
               requestedModel: prep.requestedModel,
               runId: prep.runId || undefined,
@@ -565,7 +596,8 @@ export async function POST(request: NextRequest) {
         content: out.content,
         sessionId: prep.ocSession(),
         metadata: {
-          agent: body.agent || "build",
+          agent: out.usedAgent || body.agent || "build",
+          requestedAgent: body.agent || "build",
           model: out.usedModel,
           tokensUsed: Number(out.info?.tokens?.input || 0) + Number(out.info?.tokens?.output || 0) || undefined,
           requestedModel: prep.requestedModel,
