@@ -129,7 +129,9 @@ export default function ChatPage() {
     }
     const now = Date.now();
     const since = syncSinceRef.current;
-    const fresh = runs.filter((r) => Date.parse(r.created_at || "") >= since);
+    // The active foreground request is already rendered by the live stream.
+    // Do not reconcile it as a second "working in the background" message.
+    const fresh = runs.filter((r) => Date.parse(r.created_at || "") >= since && r.id !== activeRunRef.current);
     const staleMs = 150_000; // heartbeat 20s, function cap 300s → 2.5min dead = interrupted
     const runningLive = fresh.some(
       (r) => r.status === "running" && now - Date.parse(r.updated_at || r.created_at) < staleMs

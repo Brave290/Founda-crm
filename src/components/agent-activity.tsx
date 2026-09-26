@@ -140,10 +140,12 @@ export function AgentActivity({ activity }: { activity: AgentActivityData }) {
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors"
+              aria-label="Close agent activity"
+              className="px-2.5 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.10] border border-white/[0.08] transition-colors flex items-center gap-1.5"
               title="Close"
             >
               <XIcon size={16} />
+              <span className="text-[11px]">Close</span>
             </button>
           </div>
 
