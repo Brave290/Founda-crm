@@ -12,13 +12,13 @@ const MAX_PER_WINDOW = 5;
 
 /**
  * POST /api/skill/email — the "Send email" skill's transport.
- * Auth: Supabase session cookie (logged-in) or x-device-id header (guest),
- * same identity model as /api/store. Defaults to the owner's own address.
+ * Auth: Supabase session cookie (or mobile Bearer JWT), same identity model
+ * as /api/store. Defaults to the owner's own address.
  */
 export async function POST(request: NextRequest) {
   const target = await resolveStoreTarget(request).catch(() => null);
   if (!target) {
-    return NextResponse.json({ error: "Not identified — sign in or send x-device-id" }, { status: 401 });
+    return NextResponse.json({ error: "Not identified — sign in required" }, { status: 401 });
   }
 
   const who = `${target.kind}:${target.id}`;

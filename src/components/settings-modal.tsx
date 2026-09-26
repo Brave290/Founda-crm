@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/auth";
 import { UsagePanel, useToast } from "@/components/UsagePanel";
 import { XIcon, CheckIcon, UserIcon, LayersIcon, BarChartIcon, ExternalLinkIcon, TrashIcon, ClockIcon, PlusIcon, PlugIcon, KeyIcon, ChatIcon } from "@/components/icons";
 import { McpPanel } from "@/components/mcp-panel";
-import { loadGuestSessions, saveGuestSession } from "@/lib/auth";
 import { DEFAULT_MODEL } from "@/lib/models";
 import { fetchJSON } from "@/lib/net";
 import { SKILLS, SKILL_CATEGORIES, type SkillCategory } from "@/lib/skills";
@@ -23,7 +22,7 @@ export function SettingsModal({
   initialTab?: string;
 }) {
   const router = useRouter();
-  const { user, guest, logout } = useAuth();
+  const { user, logout } = useAuth();
   const [tab, setTab] = useState<Tab>("account");
   const [models, setModels] = useState<any[]>([]);
   const [model, setModel] = useState<string>("");
@@ -222,20 +221,26 @@ export function SettingsModal({
       .catch(() => {});
   };
 
-  const importSession = () => {
+  const importSession = async () => {
     try {
       const parsed = JSON.parse(importData);
-      saveGuestSession({
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      if (!user) { toast("Sign in required", "error"); return; }
+      const row = {
         id: crypto.randomUUID(),
+        user_id: user.id,
         title: parsed.title || "Imported chat",
-        agent: parsed.agent_name || "build",
-        messages: parsed.state?.messages || [],
-        createdAt: new Date().toISOString(),
-      });
+        agent_name: parsed.agent_name || "build",
+        model: parsed.model || undefined,
+        state: { messages: parsed.state?.messages || [] },
+        message_count: (parsed.state?.messages || []).length,
+      };
+      const { error } = await createSupabaseBrowserClient().from("sessions").insert(row);
+      if (error) throw error;
       setImportData("");
-      toast(`Imported ${(parsed.state?.messages || []).length} messages`, "success");
+      toast(`Imported ${row.message_count} messages`, "success");
     } catch {
-      toast("Invalid JSON", "error");
+      toast("Invalid JSON or save failed", "error");
     }
   };
 
@@ -347,11 +352,11 @@ export function SettingsModal({
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
                   <span className="h-14 w-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-xl font-semibold flex items-center justify-center">
-                    {(user?.email?.[0] || (guest ? "G" : "?")).toUpperCase()}
+                    {(user?.email?.[0] || "?").toUpperCase()}
                   </span>
                   <div className="min-w-0">
                     <div className="text-white text-sm font-medium truncate">
-                      {user?.email || (guest ? "Guest session" : "Not signed in")}
+                      {user?.email || "Not signed in"}
                     </div>
                     <div className="text-[12px] text-slate-500">
                       {user ? "Chats sync across all your devices" : "Stored on this device profile"}

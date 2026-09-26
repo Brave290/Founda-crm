@@ -51,11 +51,7 @@ async function executeTask(t: TaskRow): Promise<string> {
   const client: any = await ensureServer();
   const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
 
-  const target =
-    t.owner_type === "user"
-      ? ({ kind: "user", id: t.owner_id } as const)
-      : ({ kind: "guest", id: t.owner_id } as const);
-  const store = await readStoreData(target as any).catch(() => null);
+  const store = await readStoreData({ kind: "user", id: t.owner_id }).catch(() => null);
   const storeKeys = store?.settings?.apiKeys || {};
   const requested = store?.settings?.prefs?.model || "";
   // Same chain shape as /api/chat: picked model → latest MiMo (keyless, fast)
@@ -121,11 +117,7 @@ async function executeTask(t: TaskRow): Promise<string> {
 async function notify(t: TaskRow, result: string): Promise<string> {
   if (!t.email) return result;
   try {
-    const store = await readStoreData(
-      (t.owner_type === "user"
-        ? { kind: "user", id: t.owner_id }
-        : { kind: "guest", id: t.owner_id }) as any
-    ).catch(() => null);
+    const store = await readStoreData({ kind: "user", id: t.owner_id }).catch(() => null);
     const smtp = resolveSmtp(store?.settings?.prefs?.email);
     if (!smtp) return result + "\n\n(Email not sent: SMTP is not configured in Settings → Schedule.)";
     await sendMail(smtp, {

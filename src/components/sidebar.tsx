@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, loadGuestSessions, saveGuestSession, deleteGuestSession, GuestSession } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { SearchIcon, PlusIcon, MessageIcon, XIcon, SettingsIcon } from "@/components/icons";
 
 export function Sidebar({
@@ -17,13 +17,12 @@ export function Sidebar({
   onOpenSettings: () => void;
 }) {
   const router = useRouter();
-  const { user, guest } = useAuth();
+  const { user } = useAuth();
   const [q, setQ] = useState("");
-  const [guestList, setGuestList] = useState<GuestSession[]>([]);
   const [acctList, setAcctList] = useState<any[]>([]);
   const [pinned, setPinned] = useState<string[]>([]);
-  const [menu, setMenu] = useState<{ x: number; y: number; id: string; title: string; guest: boolean } | null>(null);
-  const [renaming, setRenaming] = useState<{ id: string; title: string; guest: boolean } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string; title: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
 
   useEffect(() => {
@@ -35,10 +34,7 @@ export function Sidebar({
     return () => window.removeEventListener("keydown", h);
   }, [menu, renaming]);
 
-  const isGuestNav = false;
-
   const refresh = () => {
-    setGuestList(loadGuestSessions());
     if (user) {
       import("@/lib/supabase-browser")
         .then(({ createSupabaseBrowserClient }) => {
@@ -84,7 +80,7 @@ export function Sidebar({
     if (!it) return;
     if (action === "rename") {
       setRenameDraft(it.title);
-      setRenaming({ id: it.id, title: it.title, guest: it.guest });
+      setRenaming({ id: it.id, title: it.title });
       return;
     }
     if (action === "pin") {
@@ -94,45 +90,33 @@ export function Sidebar({
     if (action === "delete") {
       if (!confirm(`Delete "${it.title}"? This cannot be undone.`)) return;
       try {
-        if (it.guest || !user) {
-          deleteGuestSession(it.id);
-        } else {
-          const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
-          await createSupabaseBrowserClient().from("sessions").delete().eq("id", it.id).eq("user_id", user.id);
-        }
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+        await createSupabaseBrowserClient().from("sessions").delete().eq("id", it.id).eq("user_id", user.id);
       } catch {}
       refresh();
       return;
     }
     if (action === "clone") {
       try {
-        if (it.guest || !user) {
-          const src = loadGuestSessions().find((x) => x.id === it.id);
-          if (!src) return;
-          saveGuestSession({ ...src, id: crypto.randomUUID(), title: `${src.title} (copy)`, createdAt: new Date().toISOString() });
-          refresh();
-        } else {
-          const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
-          const sb = createSupabaseBrowserClient();
-          const { data: src } = await sb.from("sessions").select("*").eq("id", it.id).single();
-          const res = await fetch("/api/sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "create",
-              userId: user.id,
-              title: `${src?.title || "Chat"} (copy)`,
-              agentName: src?.agent_name || "build",
-              model: src?.model || undefined,
-              state: src?.state || {},
-            }),
-          });
-          const d = await res.json();
-          if (!d.session?.id) throw new Error(d.error || "clone failed");
-          refresh();
-          go(`/sessions/${d.session.id}`);
-          return;
-        }
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+        const sb = createSupabaseBrowserClient();
+        const { data: src } = await sb.from("sessions").select("*").eq("id", it.id).single();
+        const res = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create",
+            userId: user.id,
+            title: `${src?.title || "Chat"} (copy)`,
+            agentName: src?.agent_name || "build",
+            model: src?.model || undefined,
+            state: src?.state || {},
+          }),
+        });
+        const d = await res.json();
+        if (!d.session?.id) throw new Error(d.error || "clone failed");
+        refresh();
+        go(`/sessions/${d.session.id}`);
       } catch (e) {
         console.error("clone failed", e);
         return;
@@ -146,14 +130,8 @@ export function Sidebar({
     if (!it) return;
     const title = renameDraft.trim() || it.title;
     try {
-      if (it.guest || !user) {
-        const sessions = loadGuestSessions();
-        const idx = sessions.findIndex((x) => x.id === it.id);
-        if (idx >= 0) { sessions[idx].title = title; saveGuestSession(sessions[idx]); }
-      } else {
-        const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
-        await createSupabaseBrowserClient().from("sessions").update({ title, updated_at: new Date().toISOString() }).eq("id", it.id).eq("user_id", user.id);
-      }
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
+      await createSupabaseBrowserClient().from("sessions").update({ title, updated_at: new Date().toISOString() }).eq("id", it.id).eq("user_id", user.id);
     } catch {}
     refresh();
   };
@@ -162,9 +140,6 @@ export function Sidebar({
   const matches = (title: string, body?: string) =>
     !term || (title || "").toLowerCase().includes(term) || (body || "").toLowerCase().includes(term);
 
-  const guestItems = guestList.filter((s) =>
-    matches(s.title, (s.messages || []).map((m) => m.content).join(" "))
-  );
   const acctItems = acctList.filter((s) => matches(s.title));
 
   const go = (path: string) => {
@@ -174,8 +149,8 @@ export function Sidebar({
 
   const newChat = () => go(`/sessions/${crypto.randomUUID()}`);
 
-  const initial = user?.email?.[0]?.toUpperCase() || (guest ? "G" : "?");
-  const displayName = user?.email?.split("@")[0] || (guest ? "Guest" : "User");
+  const initial = user?.email?.[0]?.toUpperCase() || "?";
+  const displayName = user?.email?.split("@")[0] || "User";
 
   return (
     <>
@@ -228,29 +203,19 @@ export function Sidebar({
 
         {/* history */}
         <nav className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-          {acctItems.length + guestItems.length === 0 && (
+          {acctItems.length === 0 && (
             <div className="px-3 py-8 text-center text-[12px] text-slate-600">
               {term ? "No matches" : "No chats yet"}
             </div>
           )}
 
           {(() => {
-            const rows = [
-              ...acctItems.map((s) => ({
-                id: s.id as string,
-                title: s.title || "Untitled chat",
-                ts: new Date(s.updated_at).getTime(),
-                href: `/sessions/${s.id}`,
-                guest: false,
-              })),
-              ...guestItems.map((s) => ({
-                id: s.id as string,
-                title: s.title || "Untitled chat",
-                ts: new Date(s.createdAt).getTime(),
-                href: `/sessions/${s.id}`,
-                guest: true,
-              })),
-            ].sort((a, b) => b.ts - a.ts);
+            const rows = acctItems.map((s) => ({
+              id: s.id as string,
+              title: s.title || "Untitled chat",
+              ts: new Date(s.updated_at).getTime(),
+              href: `/sessions/${s.id}`,
+            })).sort((a, b) => b.ts - a.ts);
             const isPinned = (r: { id: string }) => pinned.includes(r.id);
             const pinnedRows = rows.filter(isPinned);
             const restRows = rows.filter((r) => !isPinned(r));
@@ -270,7 +235,7 @@ export function Sidebar({
               else if (age < 8 * day) buckets[2].list.push(r);
               else buckets[3].list.push(r);
             }
-            const item = (r: { id: string; title: string; ts: number; href: string; guest: boolean }, extra?: React.ReactNode) => (
+            const item = (r: { id: string; title: string; ts: number; href: string }, extra?: React.ReactNode) => (
               <HistoryItem
                 key={r.id}
                 active={r.id === currentId}
@@ -278,7 +243,7 @@ export function Sidebar({
                 meta={new Date(r.ts).toLocaleDateString()}
                 pinned={pinned.includes(r.id)}
                 onClick={() => go(r.href)}
-                onMenu={(x, y) => setMenu({ x, y, id: r.id, title: r.title, guest: r.guest })}
+                onMenu={(x, y) => setMenu({ x, y, id: r.id, title: r.title })}
                 extra={extra}
               />
             );

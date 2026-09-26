@@ -1,72 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import {
-  ensureInit,
-  loadStoreSessions,
-  saveStoreSession,
-  deleteStoreSession,
-  claimGuestToAccount,
-  type GuestSession,
-} from "@/lib/store";
+import { ensureInit } from "@/lib/store";
 
-// Guest mode removed: workspace data requires a signed-in account.
-
-const GUEST_KEY = "founda_guest";
-
-export type { GuestSession };
-
-// Guest flag is mirrored into a long-lived cookie so a wiped localStorage
-// still resolves to the same server-side guest store (usage, sessions, keys).
-function guestCookie(): boolean {
-  if (typeof document === "undefined") return false;
-  return /(?:^|;\s*)founda_guest=true(?:;|$)/.test(document.cookie);
-}
-
-export function isGuest(): boolean { return false; }
-
-export function enterGuestMode() { /* guest mode intentionally disabled */ }
-
-export function exitGuestMode() { /* retained for old callers */ }
-
-// Guest sessions (server-backed cache — same API as before, now persists)
-export function loadGuestSessions(): GuestSession[] {
-  return loadStoreSessions();
-}
-
-export function saveGuestSession(session: GuestSession) {
-  saveStoreSession(session);
-}
-
-export function deleteGuestSession(id: string) {
-  deleteStoreSession(id);
-}
+// Account-backed workspaces only: every signed-in user gets a server-side
+// profile store (sessions, keys, usage, prefs) that syncs across devices.
 
 // ── Auth hook ──
 export function useAuth() {
   const [user, setUser] = useState<any>(null);
-  const [guest, setGuest] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    let wasGuest = isGuest();
 
     const finish = (u: any) => {
       if (!active) return;
       setUser(u);
-      if (u) {
-        // guest store may have been entered while the session was resolving
-        const hadGuest = wasGuest || isGuest();
-        setGuest(false);
-        exitGuestMode();
-        ensureInit("account", u.id);
-        if (hadGuest) claimGuestToAccount(u.id);
-      } else {
-        // Anonymous visitors must sign in before entering the workspace.
-        setGuest(false);
-      }
+      if (u) ensureInit(u.id);
       setLoading(false);
     };
 
@@ -106,8 +58,6 @@ export function useAuth() {
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    exitGuestMode();
-    setGuest(false);
     return {};
   };
 
@@ -120,11 +70,8 @@ export function useAuth() {
     });
     if (error) return { error: error.message };
     if (data.session) {
-      exitGuestMode();
-      setGuest(false);
       setUser(data.user);
-      ensureInit("account", data.user?.id);
-      claimGuestToAccount(data.user?.id || "");
+      ensureInit(data.user?.id || null);
     }
     return { needsConfirm: !data.session };
   };
@@ -133,16 +80,7 @@ export function useAuth() {
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     setUser(null);
-    setGuest(false);
   };
 
-  const continueAsGuest = useCallback(() => {
-    enterGuestMode();
-    setGuest(true);
-    setUser(null);
-    setLoading(false);
-    ensureInit("guest");
-  }, []);
-
-  return { user, guest, loading, login, register, logout, continueAsGuest };
+  return { user, loading, login, register, logout };
 }

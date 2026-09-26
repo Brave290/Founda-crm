@@ -285,7 +285,7 @@ export default function ChatPage() {
       .catch(() => {});
   }, []);
 
-  // Load messages (server-backed store for guests — hydrate first)
+  // Load messages from the account's session row
   useEffect(() => {
     if (authLoading || !user) return;
     if (supabase) loadAccountSession();

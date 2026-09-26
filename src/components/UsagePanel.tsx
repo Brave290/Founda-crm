@@ -7,9 +7,7 @@ import {
   trackStoreUsage,
   resetStoreUsage,
   subscribe as subscribeStore,
-  ensureInit,
 } from "@/lib/store";
-import { isGuest } from "@/lib/auth";
 
 // ── Usage tracking (server-backed via lib/store, synced across devices) ──
 
@@ -33,13 +31,9 @@ function getResetTime(): number {
   return tomorrow.getTime();
 }
 
-let storeInitStarted = false;
-function initStoreIfNeeded() {
-  if (storeInitStarted || typeof window === "undefined") return;
-  storeInitStarted = true;
-  // hydrate from server (idempotent — useAuth usually wins the race)
-  if (isGuest()) ensureInit("guest");
-}
+// Hydration is owned by useAuth (ensureInit) — by the time any component
+// reads usage, the server-backed cache is already populated.
+function initStoreIfNeeded() {}
 
 export function loadUsage(): UsageState {
   if (typeof window === "undefined") {

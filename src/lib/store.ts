@@ -3,19 +3,11 @@
 // ── Server-backed store (single source of truth) ──
 // Reads are synchronous from an in-memory cache; the cache hydrates from
 // /api/store on init and writes back (debounced) on every mutation.
-// localStorage is only used for: the device id, the guest flag, and a
-// one-time legacy migration seed.
-
-export interface GuestSession {
-  id: string;
-  title: string;
-  agent: string;
-  messages: any[];
-  createdAt: string;
-}
+// localStorage is only used for: the device id (background-run identity
+// fallback) and nothing else — the server is authoritative for all data.
 
 export interface StoreData {
-  sessions: GuestSession[];
+  sessions: any[];
   settings: {
     apiKeys: Record<string, string>;
     prefs: Record<string, any>;
@@ -28,11 +20,7 @@ export interface StoreData {
   };
 }
 
-export type StoreMode = "guest" | "account" | null;
-
 const DEVICE_KEY = "founda_device";
-const LEGACY_SESSIONS_KEY = "founda_guest_sessions";
-const LEGACY_USAGE_KEY = "founda_usage";
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -47,7 +35,6 @@ function defaultData(): StoreData {
 }
 
 let cache: StoreData = defaultData();
-let mode: StoreMode = null;
 let userId: string | null = null;
 let initPromise: Promise<void> | null = null;
 let hydrated = false;
@@ -59,30 +46,12 @@ const listeners = new Set<() => void>();
 // ── Identity ──
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const m = new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(document.cookie);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-function writeCookie(name: string, value: string, maxAge = 31_536_000) {
-  if (typeof document === "undefined") return;
-  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${maxAge};SameSite=Lax`;
-}
-
-/**
- * Device identity is mirrored into a 1-year cookie so that clearing browser
- * storage ("delete cache") cannot mint a fresh identity and reset usage,
- * pinned chats, keys or sessions back to zero.
- */
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";
   let id = "";
   try { id = localStorage.getItem(DEVICE_KEY) || ""; } catch {}
-  if (!UUID_RE.test(id)) id = readCookie(DEVICE_KEY) || "";
   if (!UUID_RE.test(id)) id = crypto.randomUUID();
   try { localStorage.setItem(DEVICE_KEY, id); } catch {}
-  writeCookie(DEVICE_KEY, id);
   return id;
 }
 
@@ -100,10 +69,6 @@ function emit() {
 
 export function getStore(): StoreData {
   return cache;
-}
-
-export function isStoreReady(): boolean {
-  return initPromise !== null && mode !== null;
 }
 
 function normalize(d: any): StoreData {
@@ -125,47 +90,8 @@ function normalize(d: any): StoreData {
   };
 }
 
-function readLegacy(): StoreData {
-  const out = defaultData();
-  try {
-    const raw = localStorage.getItem(LEGACY_SESSIONS_KEY);
-    if (raw) out.sessions = JSON.parse(raw) || [];
-  } catch {}
-  try {
-    const raw = localStorage.getItem(LEGACY_USAGE_KEY);
-    if (raw) {
-      const u = JSON.parse(raw);
-      if (u && (!u.resetAt || Date.now() < u.resetAt)) {
-        out.usage = {
-          day: today(),
-          messages: u.messagesUsed || 0,
-          tokens: u.tokensUsed || 0,
-          conversations: u.conversations || 0,
-        };
-      }
-    }
-  } catch {}
-  return out;
-}
-
-function merge(legacy: StoreData, server: StoreData): StoreData {
-  // server wins where it has data; legacy seeds an empty server (first run / new device)
-  const sessions = server.sessions.length > 0 ? server.sessions : legacy.sessions;
-  const apiKeys = { ...legacy.settings.apiKeys, ...server.settings.apiKeys };
-  const prefs = { ...legacy.settings.prefs, ...server.settings.prefs };
-  const usage =
-    server.usage.messages > 0 || server.usage.tokens > 0
-      ? server.usage
-      : legacy.usage;
-  return {
-    sessions,
-    settings: { apiKeys, prefs },
-    usage,
-  };
-}
-
 function capPayload() {
-  // keep guest jsonb under the API limit: newest 20 sessions, 100 msgs each, 20k chars per msg
+  // keep the profile jsonb row under the API limit: newest 20 sessions, 100 msgs each, 20k chars per msg
   cache.sessions = cache.sessions.slice(0, 20).map((s) => {
     const msgs = (s.messages || []).slice(-100).map((m: any) =>
       typeof m?.content === "string" && m.content.length > 20000
@@ -189,11 +115,9 @@ function capPayload() {
 
 async function pushServer(): Promise<boolean> {
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (mode !== "account") headers["x-device-id"] = getDeviceId();
     const res = await fetch("/api/store", {
       method: "PUT",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: cache }),
     });
     return res.ok;
@@ -203,7 +127,6 @@ async function pushServer(): Promise<boolean> {
 }
 
 export function flush(immediate = false) {
-  if (mode === null) return;
   dirty = true;
   if (flushTimer) clearTimeout(flushTimer);
   const run = async () => {
@@ -224,48 +147,23 @@ function mutate(fn: (d: StoreData) => void) {
 }
 
 // ── Init / hydration ──
-export function ensureInit(newMode: "guest" | "account", uid?: string | null): Promise<void> {
-  if (mode === newMode && (newMode === "guest" || uid === userId) && initPromise) {
-    return initPromise;
-  }
-  mode = newMode;
+export function ensureInit(uid: string | null): Promise<void> {
+  if (userId === uid && initPromise) return initPromise;
   userId = uid || null;
   initPromise = (async () => {
     let server: StoreData | null = null;
     try {
-      if (newMode === "account" && uid) {
-        const { createSupabaseBrowserClient } = await import("./supabase-browser");
-        const supa = createSupabaseBrowserClient();
-        const { data } = await supa
-          .from("profiles")
-          .select("settings")
-          .eq("id", uid)
-          .maybeSingle();
-        if (data?.settings) server = normalize(data.settings);
-      } else {
-        const headers: Record<string, string> = { "x-device-id": getDeviceId() };
-        const res = await fetch("/api/store", { headers });
-        if (res.ok) {
-          const body = await res.json();
-          if (body?.data) server = normalize(body.data);
-        }
-      }
+      const { createSupabaseBrowserClient } = await import("./supabase-browser");
+      const supa = createSupabaseBrowserClient();
+      const { data } = await supa
+        .from("profiles")
+        .select("settings")
+        .eq("id", uid)
+        .maybeSingle();
+      if (data?.settings) server = normalize(data.settings);
     } catch {}
-
-    const legacy = mutatedDuringInit ? cache : readLegacy();
-    cache = merge(legacy, server || defaultData());
-
-    const serverEmpty =
-      !server || (server.sessions.length === 0 && Object.keys(server.settings.apiKeys).length === 0);
-    if (!mutatedDuringInit && serverEmpty && (legacy.sessions.length > 0 || legacy.usage.messages > 0)) {
-      flush(true); // one-time migration of pre-server data
-    }
+    cache = server || defaultData();
     if (mutatedDuringInit || dirty) flush(true); // don't lose edits made while hydrating
-    // clear legacy keys so migration can't double-count later
-    try {
-      localStorage.removeItem(LEGACY_SESSIONS_KEY);
-      localStorage.removeItem(LEGACY_USAGE_KEY);
-    } catch {}
     hydrated = true;
     emit();
   })();
@@ -274,27 +172,6 @@ export function ensureInit(newMode: "guest" | "account", uid?: string | null): P
 
 export async function ready(): Promise<void> {
   if (initPromise) await initPromise;
-}
-
-// ── Sessions (guest device storage) ──
-export function loadStoreSessions(): GuestSession[] {
-  return cache.sessions;
-}
-
-export function saveStoreSession(session: GuestSession) {
-  mutate((d) => {
-    const idx = d.sessions.findIndex((s) => s.id === session.id);
-    if (idx >= 0) d.sessions[idx] = session;
-    else d.sessions.unshift(session);
-    d.sessions = d.sessions.slice(0, 20);
-    d.usage.conversations = Math.max(d.usage.conversations, d.sessions.length);
-  });
-}
-
-export function deleteStoreSession(id: string) {
-  mutate((d) => {
-    d.sessions = d.sessions.filter((s) => s.id !== id);
-  });
 }
 
 // ── Settings ──
@@ -319,7 +196,7 @@ export function savePrefs(prefs: Record<string, any>) {
   });
 }
 
-// ── Usage ──
+// ── Usage (server-authoritative mirror — /api/chat also writes it) ──
 export function trackStoreUsage(messages = 1, tokens = 0) {
   mutate((d) => {
     if (d.usage.day !== today()) {
@@ -344,29 +221,4 @@ export function clearAllStoreData() {
   cache = defaultData();
   emit();
   flush(true);
-}
-
-// ── Claim guest data into a new/existing account ──
-let claimed = false;
-export async function claimGuestToAccount(uid: string) {
-  if (claimed) return;
-  claimed = true;
-  const guestSessions = cache.sessions.slice();
-  if (guestSessions.length === 0) return;
-  try {
-    const { createSupabaseBrowserClient } = await import("./supabase-browser");
-    const supa = createSupabaseBrowserClient();
-    for (const s of guestSessions) {
-      await supa.from("sessions").insert({
-        user_id: uid,
-        title: s.title || "New chat",
-        agent_name: s.agent || "build",
-        state: { messages: s.messages || [] },
-        message_count: s.messages?.length || 0,
-      });
-    }
-    mutate((d) => {
-      d.sessions = [];
-    });
-  } catch {}
 }

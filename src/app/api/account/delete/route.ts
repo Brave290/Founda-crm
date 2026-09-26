@@ -41,10 +41,15 @@ export async function POST(request: Request) {
 
     // The remaining account tables either cascade from auth.users or are
     // explicitly removed first for clarity and for databases with older FKs.
-    for (const table of ["mcp_connections", "repos", "activity_log", "session_exports", "agents", "sessions", "profiles"]) {
+    for (const table of ["mcp_connections", "repos", "activity_log", "session_exports", "agents", "sessions"]) {
       const { error } = await admin.from(table).delete().eq("user_id", uid);
       if (error) throw error;
     }
+
+    // profiles is keyed by id (not user_id) — delete it before the auth user
+    // so the auth.admin.deleteUser cascade has nothing left to trip over.
+    const { error: profileError } = await admin.from("profiles").delete().eq("id", uid);
+    if (profileError) throw profileError;
 
     const { error: deleteError } = await admin.auth.admin.deleteUser(uid);
     if (deleteError) throw deleteError;

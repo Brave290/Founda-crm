@@ -6,6 +6,7 @@ import { stepFromPart } from "@/lib/agent-activity";
 import { buildSkillsPrompt } from "@/lib/skills";
 import { resolveStoreTarget } from "@/lib/store-server";
 import { startRun, finishRun, failRun, touchRun } from "@/lib/chat-runs";
+import { recordUsage } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -35,6 +36,7 @@ interface Prep {
   hasImage: boolean;
   runId: string | null;
   clientSessionId: string | null;
+  owner: { kind: string; id: string } | null;
   ocSession(): string | null;
   runWithRecovery(): Promise<ChatOut>;
   /** Called before each attempt (failover / recovery / image-drop) so streams can reset partial state. */
@@ -69,12 +71,12 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
   const chain: string[] = [];
-  // Fast mode: flash model FIRST (instant answers, no waiting on a stale pick).
-  // Default: latest MiMo first when unpicked, immediate fallback when picked
-  // model stops responding.
+  // Fast mode: flash model FIRST, then opencode free models — no static chain,
+  // no skills catalog, nothing that adds latency. Normal mode: the user's pick
+  // first, then MiMo, then the rest.
   for (const id of fastMode
-    ? [DEFAULT_MODEL, model || "", ...nativeFree, ...staticChain]
-    : [DEFAULT_MODEL, model || "", ...nativeFree, ...staticChain]) {
+    ? [DEFAULT_MODEL, ...nativeFree]
+    : [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -280,6 +282,7 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     hasImage,
     runId: typeof runId === "string" && /^[0-9a-f-]{36}$/i.test(runId) ? runId : null,
     clientSessionId: typeof clientSessionId === "string" && clientSessionId ? clientSessionId.slice(0, 80) : null,
+    owner: null,
     ocSession: () => ocSession,
     runWithRecovery,
   };
@@ -508,6 +511,9 @@ function streamRun(prep: Prep): Response {
           // Persist BEFORE the client event: even if the user closed the tab,
           // the reply is already durable and reconciles when they come back.
           await finishRun(prep.runId, out.content, out.usedModel);
+          // Usage is written server-side here so it survives logout and
+          // refresh — the client cache is only a mirror.
+          void recordUsage(prep.owner!, 1, Number(out.info?.tokens?.input || 0) + Number(out.info?.tokens?.output || 0));
           send("done", {
             content: out.content,
             sessionId: prep.ocSession(),
@@ -524,7 +530,11 @@ function streamRun(prep: Prep): Response {
         } catch (e: any) {
           flushText();
           await failRun(prep.runId, e?.message || "opencode error");
-          send("error", { error: e?.message || "opencode error" });
+          // No raw timeout-speak: like ChatGPT/others, say the servers are busy.
+          const friendly = /timed out|empty response|agent\/model error|no model/i.test(e?.message || "")
+            ? "The AI servers are experiencing high demand right now — please try again in a moment."
+            : (e?.message || "opencode error");
+          send("error", { error: friendly });
         } finally {
           if (heartbeat) clearInterval(heartbeat);
           if (activityTimer) clearTimeout(activityTimer);
@@ -553,10 +563,6 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const owner = await resolveStoreTarget(request);
-  if (!owner || owner.kind !== "user") {
-    return NextResponse.json({ error: "Authentication required. Sign in to use Founda CRM." }, { status: 401 });
-  }
   // Server-side daily limit; usage is read from the authenticated account.
   try {
     const store = await readStoreForRequest(request);
@@ -573,16 +579,18 @@ export async function POST(request: NextRequest) {
     const prep = await prepare(request, body);
 
     // Background run record: work + result survive the user leaving the app.
+    const owner = await resolveStoreTarget(request);
+    if (!owner || owner.kind !== "user") {
+      return NextResponse.json({ error: "Authentication required. Sign in to use Founda CRM." }, { status: 401 });
+    }
+    prep.owner = owner;
     if (prep.runId && prep.clientSessionId) {
-      const owner = await resolveStoreTarget(request);
-      if (owner) {
-        await startRun(owner, {
-          runId: prep.runId,
-          clientSessionId: prep.clientSessionId,
-          prompt: String(body.prompt || ""),
-          agent: body.agent,
-        });
-      }
+      await startRun(owner, {
+        runId: prep.runId,
+        clientSessionId: prep.clientSessionId,
+        prompt: String(body.prompt || ""),
+        agent: body.agent,
+      });
     }
 
     if (body.stream === true) {
@@ -592,6 +600,7 @@ export async function POST(request: NextRequest) {
     try {
       const out = await prep.runWithRecovery();
       await finishRun(prep.runId, out.content, out.usedModel);
+      void recordUsage(prep.owner!, 1, Number(out.info?.tokens?.input || 0) + Number(out.info?.tokens?.output || 0));
       return NextResponse.json({
         content: out.content,
         sessionId: prep.ocSession(),
@@ -608,7 +617,10 @@ export async function POST(request: NextRequest) {
       });
     } catch (e: any) {
       await failRun(prep.runId, e?.message || "opencode error");
-      throw e;
+      const friendly = /timed out|empty response|agent\/model error|no model/i.test(e?.message || "")
+        ? "The AI servers are experiencing high demand right now — please try again in a moment."
+        : (e?.message || "opencode error");
+      throw new Error(friendly);
     }
   } catch (error: any) {
     return NextResponse.json(

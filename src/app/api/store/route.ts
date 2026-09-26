@@ -4,7 +4,7 @@ import { resolveStoreTarget, type StoreTarget as Target } from "@/lib/store-serv
 
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 1_500_000; // guest payloads are one jsonb row — keep them sane
+const MAX_BYTES = 1_500_000; // one jsonb profile row — keep it sane
 
 // Service-role client (bypasses RLS; access is scoped by route logic)
 const supa = createClient(
@@ -14,20 +14,12 @@ const supa = createClient(
 );
 
 async function readData(t: Target): Promise<Record<string, any>> {
-  if (t.kind === "user") {
-    const { data } = await supa
-      .from("profiles")
-      .select("settings")
-      .eq("id", t.id)
-      .maybeSingle();
-    return data?.settings || {};
-  }
   const { data } = await supa
-    .from("guest_data")
-    .select("data")
-    .eq("device_id", t.id)
+    .from("profiles")
+    .select("settings")
+    .eq("id", t.id)
     .maybeSingle();
-  return data?.data || {};
+  return data?.settings || {};
 }
 
 export async function GET(req: Request) {
@@ -53,17 +45,10 @@ export async function PUT(req: Request) {
     if (serialized.length > MAX_BYTES)
       return NextResponse.json({ error: "payload too large" }, { status: 413 });
 
-    if (t.kind === "user") {
-      const { error } = await supa
-        .from("profiles")
-        .upsert({ id: t.id, settings: data, updated_at: new Date().toISOString() });
-      if (error) throw error;
-    } else {
-      const { error } = await supa
-        .from("guest_data")
-        .upsert({ device_id: t.id, data });
-      if (error) throw error;
-    }
+    const { error } = await supa
+      .from("profiles")
+      .upsert({ id: t.id, settings: data, updated_at: new Date().toISOString() });
+    if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -74,11 +59,7 @@ export async function DELETE(req: Request) {
   const t = await resolveStoreTarget(req);
   if (!t) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
-    if (t.kind === "guest") {
-      await supa.from("guest_data").delete().eq("device_id", t.id);
-    } else {
-      await supa.from("profiles").upsert({ id: t.id, settings: {} });
-    }
+    await supa.from("profiles").upsert({ id: t.id, settings: {} });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

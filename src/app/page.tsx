@@ -25,7 +25,7 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Landing page always renders — sign-in/guest entry happens via explicit CTAs
+  // Landing page always renders — sign-in entry happens via explicit CTAs
 
   useEffect(() => {
     const els = document.querySelectorAll("[data-reveal]");
