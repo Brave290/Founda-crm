@@ -43,6 +43,7 @@ export function SettingsModal({
   const [importUrl, setImportUrl] = useState("");
   const [importData, setImportData] = useState("");
   const [importing, setImporting] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const { toast, Toaster } = useToast();
 
   const headers = async () => {
@@ -244,6 +245,35 @@ export function SettingsModal({
     router.push("/");
   };
 
+  const deleteAccount = async () => {
+    if (!user || deletingAccount) return;
+    const confirmed = window.confirm(
+      "Permanently delete your account and all chats, tasks, scheduled jobs, MCP connections, and profile data? This cannot be undone."
+    );
+    if (!confirmed) return;
+    const typed = window.prompt("Type DELETE to confirm account deletion:");
+    if (typed !== "DELETE") {
+      toast("Account deletion cancelled", "error");
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Account deletion failed");
+      await logout();
+      onClose();
+      router.replace("/");
+    } catch (error: any) {
+      toast(error?.message || "Account deletion failed", "error");
+      setDeletingAccount(false);
+    }
+  };
+
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "account", label: "Account", icon: <UserIcon size={14} /> },
     { id: "model", label: "Model", icon: <LayersIcon size={14} /> },
@@ -371,6 +401,15 @@ export function SettingsModal({
                   >
                     {user ? "Log out" : "Exit to home"}
                   </button>
+                  {user && (
+                    <button
+                      onClick={deleteAccount}
+                      disabled={deletingAccount}
+                      className="block mt-3 text-[12px] text-red-500/80 hover:text-red-400 transition-colors disabled:opacity-50"
+                    >
+                      {deletingAccount ? "Deleting account…" : "Delete my account"}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
