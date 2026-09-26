@@ -24,6 +24,11 @@ export async function resolveStoreTarget(req: Request): Promise<StoreTarget | nu
   } catch {}
   const device = req.headers.get("x-device-id");
   if (device && UUID_RE.test(device)) return { kind: "guest", id: device };
+  // Cookie fallback: localStorage can be wiped, the 1-year identity cookie
+  // cannot (without also clearing cookies), so usage/sessions never reset.
+  const cookie = req.headers.get("cookie") || "";
+  const cm = /(?:^|;\s*)founda_device=([0-9a-f-]{36})/i.exec(cookie);
+  if (cm && UUID_RE.test(cm[1])) return { kind: "guest", id: cm[1] };
   return null;
 }
 

@@ -436,7 +436,7 @@ function HistoryItem({
       onPointerUp={clearPress}
       onPointerLeave={clearPress}
       onPointerCancel={clearPress}
-      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition-colors ${
+      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition-colors select-none ${
         active ? "bg-white/[0.07] text-white" : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
       }`}
       title={`${title} — long-press or right-click for options`}
@@ -444,6 +444,23 @@ function HistoryItem({
       <MessageIcon size={14} className="shrink-0 text-slate-600" />
       <span className="flex-1 min-w-0 truncate text-[13px]">{title}</span>
       {extra}
+      {/* visible options trigger (works everywhere, even without long-press) */}
+      <span
+        role="button"
+        aria-label="Chat options"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          longFired.current = true;
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          onMenu(Math.max(8, r.right - 24), r.bottom + 6);
+        }}
+        className="shrink-0 h-6 w-6 -mr-1 rounded-md flex items-center justify-center text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+        </svg>
+      </span>
       {pinned && (
         <svg width="10" height="10" viewBox="0 0 24 24" fill="#d4af37" className="shrink-0" aria-label="pinned">
           <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />

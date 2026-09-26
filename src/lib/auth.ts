@@ -17,17 +17,34 @@ const GUEST_KEY = "founda_guest";
 
 export type { GuestSession };
 
+// Guest flag is mirrored into a long-lived cookie so a wiped localStorage
+// still resolves to the same server-side guest store (usage, sessions, keys).
+function guestCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return /(?:^|;\s*)founda_guest=true(?:;|$)/.test(document.cookie);
+}
+
 export function isGuest(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(GUEST_KEY) === "true";
+  try {
+    if (localStorage.getItem(GUEST_KEY) === "true") {
+      if (!guestCookie()) {
+        document.cookie = "founda_guest=true;path=/;max-age=31536000;SameSite=Lax";
+      }
+      return true;
+    }
+  } catch {}
+  return guestCookie();
 }
 
 export function enterGuestMode() {
-  localStorage.setItem(GUEST_KEY, "true");
+  try { localStorage.setItem(GUEST_KEY, "true"); } catch {}
+  document.cookie = "founda_guest=true;path=/;max-age=31536000;SameSite=Lax";
 }
 
 export function exitGuestMode() {
-  localStorage.removeItem(GUEST_KEY);
+  try { localStorage.removeItem(GUEST_KEY); } catch {}
+  document.cookie = "founda_guest=;path=/;max-age=0";
 }
 
 // Guest sessions (server-backed cache — same API as before, now persists)

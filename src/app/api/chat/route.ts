@@ -484,6 +484,19 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
+  // Server-side daily limit — identity comes from header or cookie, so
+  // wiping browser storage can't reset the counter (client check is UX only).
+  try {
+    const store = await readStoreForRequest(request);
+    const u: any = store?.usage;
+    const day = new Date().toISOString().slice(0, 10);
+    if (u && u.day === day && Number(u.messages) >= 1_000_000) {
+      return NextResponse.json(
+        { error: "Daily message limit reached. Resets at midnight." },
+        { status: 429 }
+      );
+    }
+  } catch {}
   try {
     const prep = await prepare(request, body);
 

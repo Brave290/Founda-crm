@@ -57,13 +57,32 @@ let dirty = false;
 const listeners = new Set<() => void>();
 
 // ── Identity ──
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const m = new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(document.cookie);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function writeCookie(name: string, value: string, maxAge = 31_536_000) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${maxAge};SameSite=Lax`;
+}
+
+/**
+ * Device identity is mirrored into a 1-year cookie so that clearing browser
+ * storage ("delete cache") cannot mint a fresh identity and reset usage,
+ * pinned chats, keys or sessions back to zero.
+ */
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
-    id = crypto.randomUUID();
-    localStorage.setItem(DEVICE_KEY, id);
-  }
+  let id = "";
+  try { id = localStorage.getItem(DEVICE_KEY) || ""; } catch {}
+  if (!UUID_RE.test(id)) id = readCookie(DEVICE_KEY) || "";
+  if (!UUID_RE.test(id)) id = crypto.randomUUID();
+  try { localStorage.setItem(DEVICE_KEY, id); } catch {}
+  writeCookie(DEVICE_KEY, id);
   return id;
 }
 
