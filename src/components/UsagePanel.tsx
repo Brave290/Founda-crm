@@ -14,7 +14,7 @@ import { isGuest } from "@/lib/auth";
 // ── Usage tracking (server-backed via lib/store, synced across devices) ──
 
 const DAILY_LIMIT = 1_000_000; // messages per day (soft anti-abuse cap)
-const TOKEN_LIMIT = 5_000_000; // hard daily budget; usage is persisted with the account
+const TOKEN_LIMIT = 5_000_000_000; // 5 billion tokens per day; usage is persisted with the account
 
 interface UsageState {
   messagesUsed: number;

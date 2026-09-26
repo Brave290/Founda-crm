@@ -9,7 +9,7 @@ import { startRun, finishRun, failRun, touchRun } from "@/lib/chat-runs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-const TOKEN_LIMIT = 5_000_000;
+const TOKEN_LIMIT = 5_000_000_000;
 
 function splitModel(m: string): { providerID: string; modelID: string } {
   const i = m.indexOf("/");
