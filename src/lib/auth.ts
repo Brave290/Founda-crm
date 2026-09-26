@@ -74,14 +74,19 @@ export function useAuth() {
       if (!active) return;
       setUser(u);
       if (u) {
+        // guest store may have been entered while the session was resolving
+        const hadGuest = wasGuest || isGuest();
         setGuest(false);
         exitGuestMode();
         ensureInit("account", u.id);
-        if (wasGuest) claimGuestToAccount(u.id);
+        if (hadGuest) claimGuestToAccount(u.id);
       } else {
-        const g = isGuest();
-        setGuest(g);
-        if (g) ensureInit("guest");
+        // Anonymous visitors ALWAYS run in guest mode. Without this the store
+        // stays uninitialized (mode === null) and every session/usage write is
+        // silently dropped — empty sidebar, usage stuck at 0.
+        if (!isGuest()) enterGuestMode();
+        setGuest(true);
+        ensureInit("guest");
       }
       setLoading(false);
     };

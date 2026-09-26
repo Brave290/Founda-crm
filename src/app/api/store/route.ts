@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { resolveStoreTarget, type StoreTarget as Target } from "@/lib/store-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,24 +10,6 @@ const supa = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_BYTES = 1_500_000; // guest payloads are one jsonb row — keep them sane
-
-type Target = { kind: "user"; id: string } | { kind: "guest"; id: string };
-
-async function resolveTarget(req: Request): Promise<Target | null> {
-  try {
-    const supabase = createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) return { kind: "user", id: user.id };
-  } catch {}
-  const device = req.headers.get("x-device-id");
-  if (device && UUID_RE.test(device)) return { kind: "guest", id: device };
-  return null;
-}
 
 async function readData(t: Target): Promise<Record<string, any>> {
   if (t.kind === "user") {
@@ -47,7 +29,7 @@ async function readData(t: Target): Promise<Record<string, any>> {
 }
 
 export async function GET(req: Request) {
-  const t = await resolveTarget(req);
+  const t = await resolveStoreTarget(req);
   if (!t) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     const data = await readData(t);
@@ -58,7 +40,7 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const t = await resolveTarget(req);
+  const t = await resolveStoreTarget(req);
   if (!t) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
@@ -87,7 +69,7 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const t = await resolveTarget(req);
+  const t = await resolveStoreTarget(req);
   if (!t) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     if (t.kind === "guest") {

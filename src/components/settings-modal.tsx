@@ -262,19 +262,19 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center sm:px-4 sm:py-8 bg-black/70 backdrop-blur-3xl animate-fade-in"
+      className="fixed inset-0 z-[90] flex items-center justify-center px-4 py-8 bg-black/70 backdrop-blur-3xl animate-fade-in"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <Toaster />
-      <div className="w-full sm:max-w-2xl h-[100dvh] sm:h-[min(640px,90vh)] rounded-none sm:rounded-2xl bg-[#10141f] border border-white/[0.08] shadow-2xl shadow-black/70 flex flex-col sm:flex-row overflow-hidden animate-scale-in">
-        {/* nav: horizontal scrolling strip on mobile, left rail on desktop */}
-        <div className="w-full shrink-0 bg-[#0a0e17] border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 flex items-center sm:items-stretch sm:flex-col overflow-x-auto gap-1.5">
-          <div className="hidden sm:block px-3 pt-3 pb-2 text-[13px] font-semibold text-white">Settings</div>
+      <div className="w-full max-w-2xl h-[min(640px,90vh)] rounded-2xl bg-[#10141f] border border-white/[0.08] shadow-2xl shadow-black/70 flex overflow-hidden animate-scale-in">
+        {/* left nav */}
+        <div className="w-40 shrink-0 bg-[#0a0e17] border-r border-white/[0.06] p-2 flex flex-col">
+          <div className="px-3 pt-3 pb-2 text-[13px] font-semibold text-white">Settings</div>
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] whitespace-nowrap shrink-0 transition-colors ${
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors ${
                 tab === t.id
                   ? "bg-white/[0.07] text-white"
                   : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
@@ -284,21 +284,23 @@ export function SettingsModal({
               {t.label}
             </button>
           ))}
-          <button
-            onClick={() => {
-              onClose();
-              router.push(`/sessions/${crypto.randomUUID()}${user ? "" : "?guest=1"}`);
-            }}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] whitespace-nowrap shrink-0 sm:mt-auto sm:w-full transition-colors"
-          >
-            <ChatIcon size={13} />
-            New chat
-          </button>
+          <div className="mt-auto">
+            <button
+              onClick={() => {
+                onClose();
+                router.push(`/sessions/${crypto.randomUUID()}${user ? "" : "?guest=1"}`);
+              }}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] w-full transition-colors"
+            >
+              <ChatIcon size={13} />
+              New chat
+            </button>
+          </div>
         </div>
 
         {/* content */}
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06]">
             <span className="text-[15px] font-semibold text-white">
               {TABS.find((t) => t.id === tab)?.label}
             </span>
@@ -307,7 +309,7 @@ export function SettingsModal({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="flex-1 overflow-y-auto p-5">
             {tab === "account" && (
               <div className="space-y-6">
                 <div className="flex items-center gap-4">

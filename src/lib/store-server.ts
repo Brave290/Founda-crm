@@ -22,6 +22,14 @@ export async function resolveStoreTarget(req: Request): Promise<StoreTarget | nu
     } = await supabase.auth.getUser();
     if (user) return { kind: "user", id: user.id };
   } catch {}
+  // Mobile (React Native) sends the Supabase JWT directly — no cookies there.
+  const authHeader = req.headers.get("authorization") || "";
+  if (authHeader.startsWith("Bearer ")) {
+    try {
+      const { data } = await supa.auth.getUser(authHeader.slice(7));
+      if (data?.user) return { kind: "user", id: data.user.id };
+    } catch {}
+  }
   const device = req.headers.get("x-device-id");
   if (device && UUID_RE.test(device)) return { kind: "guest", id: device };
   // Cookie fallback: localStorage can be wiped, the 1-year identity cookie

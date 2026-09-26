@@ -141,7 +141,7 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl p-5 animate-fade-up shadow-xl shadow-emerald-950/40">
+    <div className="rounded-2xl border border-white/10 bg-[#10141f]/95 backdrop-blur-xl p-5 animate-fade-up shadow-xl shadow-emerald-950/40">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-sm gradient-text">Usage</h3>
         <div className="text-[11px] text-emerald-300 font-mono bg-emerald-500/10 border border-emerald-500/25 px-2 py-1 rounded-md">

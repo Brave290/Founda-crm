@@ -171,7 +171,7 @@ export default function ChatPage() {
 
   // Load messages (server-backed store for guests — hydrate first)
   useEffect(() => {
-    if (isGuest || guest) {
+    if (isGuest || guest || !user) {
       import("@/lib/store").then(async (store) => {
         store.ensureInit("guest");
         await store.ready();
@@ -206,7 +206,7 @@ export default function ChatPage() {
   }, [messages, streamText, atBottom]);
 
   const saveMessages = async (updated: Message[]) => {
-    if (isGuest || guest) {
+    if (isGuest || guest || !user) {
       const sessions = loadGuestSessions();
       const idx = sessions.findIndex((s) => s.id === sessionId);
       if (idx >= 0) {
@@ -765,7 +765,7 @@ export default function ChatPage() {
     if (!title) return;
     titleRef.current = title;
     try {
-      if (isGuest || guest) {
+      if (isGuest || guest || !user) {
         const sessions = loadGuestSessions();
         const idx = sessions.findIndex((x: any) => x.id === sessionId);
         if (idx >= 0) {
@@ -842,7 +842,7 @@ export default function ChatPage() {
   };
 
   const paletteActions: PaletteAction[] = [
-    { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest ? "?guest=1" : ""}`) },
+    { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest || !user ? "?guest=1" : ""}`) },
     { id: "audit", group: "Chat", label: "Run security audit", hint: "/audit", icon: <ShieldIcon size={14} />, run: () => runSlash("/audit", "") },
     { id: "image", group: "Chat", label: "Generate an image…", hint: "/image", icon: <ImageIcon size={14} />, run: () => { inputApiRef.current?.set("/image "); setTimeout(() => inputApiRef.current?.focus(), 50); } },
     { id: "export-json", group: "Chat", label: "Export chat as JSON", hint: "/export json", icon: <DownloadIcon size={14} />, run: () => exportChat("json") },

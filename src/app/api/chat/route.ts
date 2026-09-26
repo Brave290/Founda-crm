@@ -62,8 +62,9 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
   const chain: string[] = [];
-  // Latest MiMo is the app default when the user hasn't picked a model.
-  for (const id of [model || "", model ? "" : DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
+  // Latest MiMo is the app default: first when the user hasn't picked a model,
+  // and the IMMEDIATE fallback when a picked model stops responding.
+  for (const id of [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -141,7 +142,15 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
         const systemAll = [systemPrompt, skillsText].filter(Boolean).join("\n\n");
         if (systemAll) promptParams.system = systemAll;
 
-        const result: any = await client.session.prompt(promptParams);
+        // A dead/unresponsive provider can hang for the full function limit —
+        // fail over to the next model (MiMo) instead of stalling the chat.
+        const promptRace = Promise.race([
+          client.session.prompt(promptParams),
+          new Promise((_res, rej) =>
+            setTimeout(() => rej(new Error("model timed out after 120s")), 120_000)
+          ),
+        ]);
+        const result: any = await promptRace;
         if (!result?.data) {
           throw new Error(result?.error ? JSON.stringify(result.error) : "empty result");
         }

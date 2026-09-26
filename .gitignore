@@ -8,8 +8,12 @@ next-env.d.ts.env.local
 .vercel
 *.log
 out/
-android/
-ios/
+/android/
+/ios/
 .env*
 .opencode/
 .opencode-runtime/
+
+# Android signing — never commit the keystore
+mobile/android/app/release.keystore
+mobile/android/app/*.keystore.b64

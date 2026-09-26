@@ -89,6 +89,9 @@ export function getDeviceId(): string {
 // ── Events ──
 export function subscribe(fn: () => void): () => void {
   listeners.add(fn);
+  // Late subscribers (sidebar, usage panel) often attach AFTER hydration has
+  // already emitted — replay immediately so they don't render stale-empty.
+  if (hydrated) fn();
   return () => listeners.delete(fn);
 }
 function emit() {
