@@ -57,3 +57,6 @@ npx cap open ios       # Build iOS
 - External API key management
 - Supabase auth with RLS
 - PWA + APK + iOS installable
+## Releases
+
+Tagged releases ship a source zip on the [Releases page](https://github.com/Brave290/Founda-crm/releases) (currently **v0.1.0**).
