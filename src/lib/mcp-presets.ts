@@ -40,7 +40,7 @@ export const MCP_CATEGORIES: McpCategory[] = [
 export const MCP_PRESETS: McpPreset[] = [
   // ── Development / infrastructure ────────────────────────────────
   { id: "vercel", name: "Vercel", desc: "Deployments, projects, domains", category: "Development", mode: "remote", url: "https://mcp.vercel.com", auth: "OAuth" },
-  { id: "github", name: "GitHub", desc: "Repos, issues, PRs, Actions", category: "Development", mode: "remote", url: "https://api.githubcopilot.com/mcp/", auth: "Token", authHeader: { header: "Authorization", prefix: "Bearer ", label: "GitHub PAT" } },
+  { id: "github", name: "GitHub", desc: "Repos, issues, PRs, Actions", category: "Development", mode: "remote", url: "https://api.githubcopilot.com/mcp/", auth: "OAuth" },
   { id: "netlify", name: "Netlify", desc: "Sites, deploys, env vars", category: "Development", mode: "remote", url: "https://netlify-mcp.netlify.app/mcp", auth: "OAuth" },
   { id: "sentry", name: "Sentry", desc: "Errors, issues, releases", category: "Development", mode: "remote", url: "https://mcp.sentry.dev/sse", auth: "OAuth" },
   { id: "buildkite", name: "Buildkite", desc: "CI/CD pipelines and builds", category: "Development", mode: "remote", url: "https://mcp.buildkite.com/mcp", auth: "OAuth" },

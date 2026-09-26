@@ -10,8 +10,8 @@ import { MCP_PRESETS, splitCommand, type McpPreset } from "@/lib/mcp-presets";
 // Every preset is one row: logo · name · description · a single Connect
 // button. Clicking Connect either opens the provider's OAuth page in a new
 // browser tab (callback relays back through /api/mcp/oauth/*), or — for
-// token-based connectors like GitHub — asks for an API key and wires the
-// header for you. No command lines, no manual URL forms.
+// token-based connectors — asks for an API key and wires the header for you.
+// No command lines, no manual URL forms.
 
 const callbackUrl = () =>
   typeof window !== "undefined" ? `${window.location.origin}/api/mcp/oauth/callback` : "";
@@ -104,7 +104,7 @@ function McpPanel() {
     setBusyId(p.id);
     setPendingUrl(null);
     // open the tab SYNCHRONOUSLY in the click gesture so popup blockers allow it
-    const win = window.open("about:blank", "_blank");
+    const win = window.open(`${window.location.origin}/`, "_blank");
     try {
       const added = await ensureAdded(p);
       if (!added) {

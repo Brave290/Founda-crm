@@ -31,8 +31,11 @@ export async function GET(req: NextRequest) {
   }
 
   const flag = error ? "error" : code ? "ok" : "missing";
-  const url = new URL("/", req.url);
-  url.searchParams.set("mcp_oauth", flag);
-  if (error) url.searchParams.set("mcp_error", description || error);
-  return NextResponse.redirect(url);
+  const appUrl = new URL("/", req.url);
+  appUrl.searchParams.set("mcp_oauth", flag);
+  if (error) appUrl.searchParams.set("mcp_error", description || error);
+  const safeUrl = appUrl.toString().replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return new NextResponse(`<!doctype html><html><body style="font-family:system-ui;background:#0b1020;color:#cbd5e1;display:grid;place-items:center;height:100vh"><p>Returning to Founda…</p><script>window.close();</script><noscript><a href="${safeUrl}">Return to Founda</a></noscript></body></html>`, {
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
 }
