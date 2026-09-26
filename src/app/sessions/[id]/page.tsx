@@ -501,7 +501,7 @@ export default function ChatPage() {
       return;
     }
     if (cmd === "/model") {
-      if (!arg) { toast(model ? `Current: ${model}` : "Using default model. Usage: /model pollinations/openai-fast", "success"); return; }
+      if (!arg) { toast(model ? `Current: ${model}` : "Using default model. Usage: /model <model-id>", "success"); return; }
       setModel(arg);
       import("@/lib/store").then((st) => st.savePrefs({ model: arg })).catch(() => {});
       toast(`Model set to ${arg}`, "success");

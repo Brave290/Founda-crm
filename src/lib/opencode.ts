@@ -306,28 +306,13 @@ export async function upgradeOpencode(): Promise<{ success: boolean; message: st
 
 // --- Server Lifecycle ---
 
-// Out-of-the-box config: keyless free provider (Pollinations) as default so
-// the engine answers without any API keys. User keys (Groq/OpenRouter/...)
-// can be layered on later via client.auth.set + model picker.
+// Out-of-the-box config: opencode's keyless free models (MiMo) as the
+// default so the engine answers without any API keys. No hardcoded providers.
 function engineConfig() {
   const permission = { edit: "allow" as const, bash: "allow" as const, webfetch: "allow" as const };
   return {
     $schema: "https://opencode.ai/config.json",
     model: process.env.OPENCODE_DEFAULT_MODEL || "opencode/mimo-v2.6-flash-free",
-    provider: {
-      pollinations: {
-        npm: "@ai-sdk/openai-compatible",
-        name: "Pollinations (free, keyless)",
-        options: {
-          baseURL: "https://text.pollinations.ai/openai",
-          apiKey: process.env.POLLINATIONS_API_KEY || "founda-free",
-        },
-        models: {
-          "openai-fast": { name: "GPT-OSS 20B (fast) - free" },
-          "openai": { name: "GPT-OSS 20B - free" },
-        },
-      },
-    },
     permission,
   };
 }

@@ -67,7 +67,7 @@ async function executeTask(t: TaskRow): Promise<string> {
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
   const chain: string[] = [];
-  for (const id of [requested, DEFAULT_MODEL, ...nativeFree, ...buildModelChain(requested, storeKeys, process.env), "pollinations/openai-fast"]) {
+  for (const id of [requested, DEFAULT_MODEL, ...nativeFree, ...buildModelChain(requested, storeKeys, process.env)]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 

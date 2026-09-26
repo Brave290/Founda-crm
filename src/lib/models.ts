@@ -17,25 +17,10 @@ export interface CatalogProvider {
   models: CatalogModel[];
 }
 
-export const MODEL_CATALOG: CatalogProvider[] = [
-  {
-    provider: "opencode",
-    label: "MiMo · free",
-    keyless: true,
-    models: [
-      { id: "opencode/mimo-v2.6-flash-free", label: "MiMo v2.6 Flash · free" },
-    ],
-  },
-  {
-    provider: "pollinations",
-    label: "Pollinations",
-    keyless: true,
-    models: [
-      { id: "pollinations/openai-fast", label: "GPT-OSS 20B fast · free" },
-      { id: "pollinations/openai", label: "GPT-OSS 20B · free" },
-    ],
-  },
-];
+// Static catalog removed: the model picker is driven entirely by
+// opencode's live model list (see mergeNativeModels) — no hardcoded
+// providers, no pollinations, no openai entries.
+export const MODEL_CATALOG: CatalogProvider[] = [];
 
 export interface ResolvedModel extends CatalogModel {
   provider: string;
@@ -84,7 +69,6 @@ export function buildModelChain(
   const chain: string[] = [DEFAULT_MODEL];
   if (requested && !chain.includes(requested)) chain.push(requested);
   for (const id of available) if (!chain.includes(id)) chain.push(id);
-  if (!chain.length) chain.push("pollinations/openai-fast");
   return chain;
 }
 
