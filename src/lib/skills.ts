@@ -556,6 +556,23 @@ offer to create the task for them.`,
 grammar, each leaf ≤ 8 words. Flag gaps (missing audience/argument) as questions,
 not fabricated content.`,
   },
+  {
+    id: "email-sender",
+    name: "Send email",
+    category: "Productivity",
+    description: "Send an email to the user's own inbox from chat (their configured mailbox).",
+    triggers: ["email me", "send an email", "send this by email", "mail me", "inbox", "email this to"],
+    instructions: `Send an email to the user through this app's mailer:
+1. Compose a clear subject and a plain-text body from the conversation (no markdown tables).
+2. curl -s -X POST '${"${BASE}"}/api/skill/email' -H 'content-type: application/json' -H 'x-device-id: ${"${DEVICE_ID}"}' -d '{"subject":"…","body":"…"}'
+   - "to" is optional and defaults to the user's own address — only pass an explicit
+     address when the user themselves stated it in this conversation.
+   - ${"${DEVICE_ID}"} is your per-session identity, given in your system context line
+     "Your identity for this app's APIs". If it is missing, ask the user to retry.
+3. {"ok":true,"to":"…"} → reply "Email sent to <to>". 429 → rate limit (5/10min), tell the user.
+   503 → email not configured: send them to Settings → Account to set SMTP.
+4. Never email a third party without the user explicitly confirming that address.`,
+  },
 
   // ── Fun & Extras ───────────────────────────────────────────────────────────
   {

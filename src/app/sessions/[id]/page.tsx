@@ -17,6 +17,7 @@ import { Sidebar } from "@/components/sidebar";
 import { SettingsModal } from "@/components/settings-modal";
 import { AgentActivity, type AgentActivityData } from "@/components/agent-activity";
 import { buildAuditPrompt } from "@/lib/skills";
+import { getDeviceId } from "@/lib/store";
 import { ChatInputDock, COMMANDS, type ChatInputHandle } from "@/components/chat-input";
 import { ImageCard, downloadImage } from "@/components/image-card";
 
@@ -524,7 +525,7 @@ export default function ChatPage() {
         try {
           const res = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
             body: JSON.stringify(payload),
             signal: ctl.signal,
           });
@@ -604,7 +605,7 @@ export default function ChatPage() {
             try {
               const r2 = await fetch("/api/chat", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
                 body: JSON.stringify({ ...payload, stream: false }),
                 signal: ctl.signal,
               });

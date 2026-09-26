@@ -49,6 +49,12 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
   // Plugin skills (catalog + user's enabled set from store prefs) ride along
   // as extra system text so the model knows exactly what it can do.
   const skillsPrompt = buildSkillsPrompt(store?.settings?.prefs);
+  // Give the model its per-session identity so skill endpoints (e.g. the
+  // email mailer) can authenticate the caller like /api/store does.
+  const deviceId = request.headers.get("x-device-id");
+  const skillsWithIdentity = deviceId
+    ? `${skillsPrompt}\n\nYour identity for this app's APIs: send header "x-device-id: ${deviceId}" whenever a skill instructs you to call this app's own API (the ${deviceId} placeholder in skill text means this value).`
+    : skillsPrompt;
   const storeKeys = store?.settings?.apiKeys || {};
   const staticChain = buildModelChain(model, storeKeys, process.env);
   const nativeFree = (await listNativeModels())
@@ -129,7 +135,10 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
           model: splitModel(m),
         };
         if (agent) promptParams.agent = agent;
-        const systemAll = [systemPrompt, skillsPrompt].filter(Boolean).join("\n\n");
+        const skillsText = deviceId
+          ? skillsWithIdentity.split("${DEVICE_ID}").join(deviceId)
+          : skillsWithIdentity;
+        const systemAll = [systemPrompt, skillsText].filter(Boolean).join("\n\n");
         if (systemAll) promptParams.system = systemAll;
 
         const result: any = await client.session.prompt(promptParams);
