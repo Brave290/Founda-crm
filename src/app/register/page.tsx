@@ -131,18 +131,6 @@ export default function RegisterPage() {
         </button>
       </form>
 
-      <div className="flex items-center gap-3 my-5">
-        <div className="flex-1 h-px bg-white/[0.08]" />
-        <span className="text-[11px] text-slate-600">or</span>
-        <div className="flex-1 h-px bg-white/[0.08]" />
-      </div>
-
-      <button
-        onClick={handleGuest}
-        className="w-full py-3 rounded-xl text-sm text-slate-400 hover:text-white border border-white/10 hover:bg-white/[0.05] hover:border-white/25 transition-all animate-fade-up stagger-5"
-      >
-        Try without account
-      </button>
 
       <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-slate-600">
         <span className="flex items-center gap-1 text-emerald-500/90">

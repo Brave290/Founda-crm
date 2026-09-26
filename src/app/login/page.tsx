@@ -93,21 +93,6 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <div className="flex items-center gap-3 my-5">
-        <div className="flex-1 h-px bg-white/[0.08]" />
-        <span className="text-[11px] text-slate-600">or</span>
-        <div className="flex-1 h-px bg-white/[0.08]" />
-      </div>
-
-      <button
-        onClick={handleGuest}
-        className="w-full py-3 rounded-xl text-sm text-slate-400 hover:text-white border border-white/10 hover:bg-white/[0.05] hover:border-white/25 transition-all animate-fade-up stagger-4"
-      >
-        Continue as guest
-      </button>
-      <p className="text-[11px] text-slate-700 text-center mt-3 leading-relaxed">
-        Guest chats stay on this device and are not saved permanently.
-      </p>
 
       <p className="text-center text-[13px] text-slate-500 mt-6 animate-fade-up stagger-5">
         New here?{" "}

@@ -32,9 +32,11 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh the auth session cookie. No redirects here — guest mode must
-  // work without an account, and pages handle auth state client-side.
-  await supabase.auth.getUser();
+  // Refresh auth and protect workspace routes. Guest mode is disabled;
+  // every session, usage record, and integration belongs to an account.
+  const { data: { user } } = await supabase.auth.getUser();
+  const protectedPath = request.nextUrl.pathname.startsWith("/sessions") || request.nextUrl.pathname.startsWith("/dashboard");
+  if (protectedPath && !user) return NextResponse.redirect(new URL("/login", request.url));
 
   return response;
 }

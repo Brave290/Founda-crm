@@ -222,11 +222,6 @@ export default function Home() {
               desc: "Real-time token counter, daily message limits, countdown timer, and session statistics.",
             },
             {
-              icon: <GhostIcon size={20} />,
-              title: "Guest mode",
-              desc: "Start chatting instantly without an account. Nothing stored. Upgrade anytime to persist.",
-            },
-            {
               icon: <RefreshIcon size={20} />,
               title: "Export / import",
               desc: "Download session JSON at any time. Import to upgrade, migrate, or restore. Never lose context.",
@@ -452,7 +447,7 @@ export default function Home() {
             Ready to start building?
           </h2>
           <p className="text-slate-400 text-lg mb-8 max-w-lg mx-auto">
-            Create a free account for persistent sessions, or try it right now as a guest — no strings attached.
+            Create a free account for persistent sessions, secure integrations, and reliable AI runs.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -462,13 +457,6 @@ export default function Home() {
               Create free account
               <ArrowRightIcon size={16} />
             </Link>
-            <button
-              onClick={handleGuest}
-              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-slate-300 hover:text-white flex items-center justify-center gap-2"
-            >
-              <GhostIcon size={16} />
-              Continue as guest
-            </button>
           </div>
           <div className="flex items-center justify-center gap-6 mt-8 text-[12px] text-slate-600">
             <div className="flex items-center gap-1.5"><CheckIcon size={12} className="text-slate-400" />Free forever</div>
