@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/UsagePanel";
 import { SearchIcon, PlusIcon, TrashIcon, CheckIcon } from "@/components/icons";
+import { McpLogo } from "@/components/mcp-logo";
 import { MCP_PRESETS, MCP_CATEGORIES, splitCommand, type McpPreset } from "@/lib/mcp-presets";
 
 // ── MCP connector browser + connect form (shared with Settings → MCP) ──
@@ -135,14 +136,28 @@ function McpPanel() {
       (!term || (p.name + " " + p.desc + " " + p.id).toLowerCase().includes(term))
   );
 
+  // A preset counts as connected when a live server matches by name or URL —
+  // this is what flips cards to the green "Connected" state (Manus-style).
+  const matchPreset = (p: McpPreset) =>
+    servers.find((s: any) => {
+      const n = String(s.name || s.id || "").toLowerCase();
+      const u = String(s.config?.url || s.url || "");
+      const cmd = String((s.config?.command || s.command || []).join?.(" ") || "");
+      return n === p.name.toLowerCase() || n === p.id ||
+        (!!p.url && u === p.url) ||
+        (!!p.command && cmd === p.command);
+    });
+
+  const FEATURED = ["vercel", "github", "supabase", "notion", "linear", "sentry"];
+
   return (
     <div>
       <Toaster />
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-white">MCP servers</h2>
+          <h2 className="text-lg font-semibold text-white">Integrations</h2>
           <p className="text-[13px] text-slate-500 mt-0.5">
-            {MCP_PRESETS.length} built-in connectors — link, command, or search below
+            Connect the tools you use — one click for {MCP_PRESETS.length} apps, or add your own MCP connector
           </p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)} className="glass-btn-primary px-4 py-2 rounded-lg text-[13px] flex items-center gap-1.5">
@@ -218,6 +233,32 @@ function McpPanel() {
         </div>
       )}
 
+      {/* Popular row — logos up front, live connected state */}
+      <div className="mb-5">
+        <div className="text-[10px] uppercase tracking-wider text-slate-600 mb-2">Popular</div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {FEATURED.map((id) => {
+            const p = MCP_PRESETS.find((x) => x.id === id);
+            if (!p) return null;
+            const sp = matchPreset(p);
+            return sp ? (
+              <div key={id}
+                className="flex items-center gap-2 shrink-0 pl-2 pr-3 py-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/[0.08]">
+                <McpLogo name={p.name} id={p.id} url={p.url} size={20} radius={6} />
+                <span className="text-[12px] text-emerald-100 whitespace-nowrap">{p.name}</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+              </div>
+            ) : (
+              <button key={id} onClick={() => pickPreset(p)}
+                className="flex items-center gap-2 shrink-0 pl-2 pr-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 transition-colors">
+                <McpLogo name={p.name} id={p.id} url={p.url} size={20} radius={6} />
+                <span className="text-[12px] text-slate-300 whitespace-nowrap">{p.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Catalog */}
       <div className="flex flex-col sm:flex-row gap-2.5 mb-3">
         <div className="relative flex-1">
@@ -241,13 +282,57 @@ function McpPanel() {
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-6">
-        {filtered.map((p) => (
+        {/* Bring-your-own connector */}
+        <button onClick={() => { resetForm(); setMode("url"); setShowAdd(true); }}
+          className="glass-card p-3.5 text-left !transform-none border border-dashed border-emerald-400/30 hover:bg-emerald-500/[0.05] transition-colors group">
+          <div className="flex items-center gap-2.5">
+            <div className="h-[30px] w-[30px] rounded-lg border border-dashed border-emerald-400/40 flex items-center justify-center text-emerald-300 group-hover:bg-emerald-500/10 transition-colors">
+              <PlusIcon size={14} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-white group-hover:text-emerald-200 transition-colors">Custom connector</div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5">Point us at any MCP server URL or command</div>
+            </div>
+          </div>
+        </button>
+        {filtered.map((p) => {
+          const sp = matchPreset(p);
+          if (sp) {
+            return (
+              <div key={p.id}
+                className="glass-card p-3.5 text-left !transform-none border border-emerald-400/25 bg-emerald-500/[0.04]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <McpLogo name={p.name} id={p.id} url={p.url} size={30} radius={8} />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium text-white truncate">{p.name}</div>
+                      <div className="text-[11px] text-emerald-300 truncate mt-0.5 flex items-center gap-1">
+                        <CheckIcon size={10} /> Connected
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => disconnect(sp.name || sp.id)}
+                    className="shrink-0 text-[10px] px-2 py-1 rounded-md border border-white/10 text-slate-500 hover:text-red-400 hover:border-red-400/30 transition-colors">
+                    Remove
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10px] text-slate-600">{p.category}</span>
+                  <span className="text-[10px] text-emerald-400">{sp.status || "active"}</span>
+                </div>
+              </div>
+            );
+          }
+          return (
           <button key={p.id} onClick={() => pickPreset(p)}
             className="glass-card p-3.5 text-left !transform-none hover:bg-white/[0.04] transition-colors group">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[13px] font-medium text-white truncate group-hover:text-emerald-200 transition-colors">{p.name}</div>
-                <div className="text-[11px] text-slate-500 truncate mt-0.5">{p.desc}</div>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <McpLogo name={p.name} id={p.id} url={p.url} size={30} radius={8} />
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-white truncate group-hover:text-emerald-200 transition-colors">{p.name}</div>
+                  <div className="text-[11px] text-slate-500 truncate mt-0.5">{p.desc}</div>
+                </div>
               </div>
               <span className={`shrink-0 text-[9.5px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
                 p.mode === "remote"
@@ -264,7 +349,8 @@ function McpPanel() {
               }`}>{p.auth}</span>
             </div>
           </button>
-        ))}
+          );
+        })}
         {filtered.length === 0 && (
           <p className="text-slate-600 text-sm text-center py-8 col-span-full">No connectors match “{q}”.</p>
         )}
@@ -272,12 +358,20 @@ function McpPanel() {
 
       <div className="text-[10px] uppercase tracking-wider text-slate-600 mb-2">Connected</div>
       <div className="space-y-2">
-        {servers.map((s: any, i: number) => (
+        {servers.map((s: any, i: number) => {
+          const label = s.name || s.id;
+          const preset = MCP_PRESETS.find(
+            (p) => p.name.toLowerCase() === String(label).toLowerCase() || p.id === String(label).toLowerCase()
+          );
+          return (
           <div key={i} className="glass-card p-4 flex items-center justify-between animate-fade-up">
-            <div className="min-w-0">
-              <div className="font-medium text-white text-sm truncate">{s.name || s.id}</div>
-              <div className="text-xs text-slate-500 font-mono truncate">
-                {s.config?.type === "remote" || s.type === "remote" ? (s.config?.url || s.url || "remote") : ((s.config?.command || s.command || []).join?.(" ") || s.type || "local")}
+            <div className="flex items-center gap-3 min-w-0">
+              <McpLogo name={String(label)} id={preset?.id} url={preset?.url} size={32} radius={9} />
+              <div className="min-w-0">
+                <div className="font-medium text-white text-sm truncate">{label}</div>
+                <div className="text-xs text-slate-500 font-mono truncate">
+                  {s.config?.type === "remote" || s.type === "remote" ? (s.config?.url || s.url || "remote") : ((s.config?.command || s.command || []).join?.(" ") || s.type || "local")}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -291,7 +385,8 @@ function McpPanel() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
         {servers.length === 0 && <p className="text-slate-600 text-sm text-center py-8">No MCP servers connected.</p>}
       </div>
     </div>
