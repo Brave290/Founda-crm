@@ -10,24 +10,11 @@ export default function DashboardRedirect() {
 
   useEffect(() => {
     (async () => {
-      let userId: string | null = null;
-      let guest = false;
       try {
-        const { isGuest } = await import("@/lib/auth");
-        guest = isGuest();
         const { createSupabaseBrowserClient } = await import("@/lib/supabase-browser");
         const { data } = await createSupabaseBrowserClient().auth.getUser();
-        userId = data.user?.id || null;
-      } catch {}
-      if (!userId && !guest) {
-        try {
-          const { enterGuestMode } = await import("@/lib/auth");
-          enterGuestMode();
-        } catch {}
-        guest = true;
-      }
-      const suffix = !userId && guest ? "?guest=1" : "";
-      router.replace(`/sessions/${crypto.randomUUID()}${suffix}`);
+        router.replace(data.user ? `/sessions/${crypto.randomUUID()}` : "/login");
+      } catch { router.replace("/login"); }
     })();
   }, [router]);
 

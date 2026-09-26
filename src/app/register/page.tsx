@@ -9,7 +9,7 @@ import { MailIcon, LockIcon, CheckCircleIcon } from "@/components/icons";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, continueAsGuest, user, loading: authLoading } = useAuth();
+  const { register, user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -34,10 +34,6 @@ export default function RegisterPage() {
     router.refresh();
   };
 
-  const handleGuest = () => {
-    continueAsGuest();
-    router.push(`/sessions/${crypto.randomUUID()}`);
-  };
 
   if (needsConfirm) {
     return (

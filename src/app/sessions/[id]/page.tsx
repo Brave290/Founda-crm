@@ -54,7 +54,6 @@ export default function ChatPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
-  const isGuest = searchParams.get("guest") === "1";
 
   const { user, guest, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -295,21 +294,9 @@ export default function ChatPage() {
 
   // Load messages (server-backed store for guests — hydrate first)
   useEffect(() => {
-    if (isGuest || guest || !user) {
-      import("@/lib/store").then(async (store) => {
-        store.ensureInit("guest");
-        await store.ready();
-        const session = loadGuestSessions().find((s) => s.id === sessionId);
-        if (session) {
-          setMessages(session.messages || []);
-          setActiveAgent(session.agent || "build");
-          titleRef.current = session.title || "New chat";
-        }
-      }).catch(() => {});
-    } else if (supabase && user) {
-      loadAccountSession();
-    }
-  }, [supabase, user, isGuest, guest, sessionId]);
+    if (authLoading || !user) return;
+    if (supabase) loadAccountSession();
+  }, [supabase, user, authLoading, sessionId]);
 
   const loadAccountSession = async () => {
     if (!supabase || !user) return;
@@ -330,23 +317,8 @@ export default function ChatPage() {
   }, [messages, streamText, atBottom]);
 
   const saveMessages = async (updated: Message[]) => {
-    if (isGuest || guest || !user) {
-      const sessions = loadGuestSessions();
-      const idx = sessions.findIndex((s) => s.id === sessionId);
-      if (idx >= 0) {
-        sessions[idx].messages = updated;
-        sessions[idx].agent = activeAgent;
-        saveGuestSession(sessions[idx]);
-      } else if (updated.length > 0) {
-        saveGuestSession({
-          id: sessionId,
-          title: titleRef.current || "New chat",
-          agent: activeAgent,
-          messages: updated,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } else if (supabase && user) {
+    if (!user || !supabase) return;
+    if (supabase && user) {
       try {
         const { error } = await supabase.from("sessions").update({
           state: { messages: updated },

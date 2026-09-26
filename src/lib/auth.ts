@@ -11,7 +11,7 @@ import {
   type GuestSession,
 } from "@/lib/store";
 
-// ── Guest mode: use app without account (data stored server-side per device) ──
+// Guest mode removed: workspace data requires a signed-in account.
 
 const GUEST_KEY = "founda_guest";
 
@@ -24,28 +24,11 @@ function guestCookie(): boolean {
   return /(?:^|;\s*)founda_guest=true(?:;|$)/.test(document.cookie);
 }
 
-export function isGuest(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    if (localStorage.getItem(GUEST_KEY) === "true") {
-      if (!guestCookie()) {
-        document.cookie = "founda_guest=true;path=/;max-age=31536000;SameSite=Lax";
-      }
-      return true;
-    }
-  } catch {}
-  return guestCookie();
-}
+export function isGuest(): boolean { return false; }
 
-export function enterGuestMode() {
-  try { localStorage.setItem(GUEST_KEY, "true"); } catch {}
-  document.cookie = "founda_guest=true;path=/;max-age=31536000;SameSite=Lax";
-}
+export function enterGuestMode() { /* guest mode intentionally disabled */ }
 
-export function exitGuestMode() {
-  try { localStorage.removeItem(GUEST_KEY); } catch {}
-  document.cookie = "founda_guest=;path=/;max-age=0";
-}
+export function exitGuestMode() { /* retained for old callers */ }
 
 // Guest sessions (server-backed cache — same API as before, now persists)
 export function loadGuestSessions(): GuestSession[] {
@@ -81,12 +64,8 @@ export function useAuth() {
         ensureInit("account", u.id);
         if (hadGuest) claimGuestToAccount(u.id);
       } else {
-        // Anonymous visitors ALWAYS run in guest mode. Without this the store
-        // stays uninitialized (mode === null) and every session/usage write is
-        // silently dropped — empty sidebar, usage stuck at 0.
-        if (!isGuest()) enterGuestMode();
-        setGuest(true);
-        ensureInit("guest");
+        // Anonymous visitors must sign in before entering the workspace.
+        setGuest(false);
       }
       setLoading(false);
     };

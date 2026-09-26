@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import {
   Logo, ChatIcon, BotIcon, ZapIcon, GhostIcon, DownloadIcon,
@@ -15,7 +14,6 @@ import {
 const TILE = "h-11 w-11 rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-200";
 
 export default function Home() {
-  const { continueAsGuest } = useAuth();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -50,10 +48,6 @@ export default function Home() {
     return () => io.disconnect();
   }, []);
 
-  const handleGuest = () => {
-    continueAsGuest();
-    router.push(`/sessions/${crypto.randomUUID()}?guest=1`);
-  };
 
   return (
     <div className="min-h-screen text-white relative overflow-hidden bg-[#0b1120]">
@@ -129,18 +123,8 @@ export default function Home() {
               Start free
               <ArrowRightIcon size={16} />
             </Link>
-            <button
-              onClick={handleGuest}
-              className="glass-btn px-7 py-3.5 rounded-xl text-[15px] text-slate-300 hover:text-white w-full sm:w-auto flex items-center justify-center gap-2"
-            >
-              <GhostIcon size={16} />
-              Try without account
-            </button>
           </div>
 
-          <p className="text-xs text-slate-600 animate-fade-up stagger-4">
-            Guest mode available. Sessions persist only when signed in.
-          </p>
 
           {/* Hero mockup */}
           <div className="mt-14 animate-fade-up stagger-5">

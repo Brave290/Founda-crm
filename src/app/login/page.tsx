@@ -9,7 +9,7 @@ import { MailIcon, LockIcon } from "@/components/icons";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, continueAsGuest, user, loading: authLoading } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,10 +31,6 @@ export default function LoginPage() {
     router.refresh();
   };
 
-  const handleGuest = () => {
-    continueAsGuest();
-    router.push(`/sessions/${crypto.randomUUID()}`);
-  };
 
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your persistent AI workspace">
