@@ -550,7 +550,8 @@ export default function ChatPage() {
                 content = typeof data.text === "string" ? data.text : content;
                 lastContent = content;
                 setStreamText(content);
-                if (content && reasonText) collapseReason();
+                // thinking stays open while streaming — collapses on done only,
+                // so the thinking container shows the full reasoning live
               } else if (name === "done") {
                 done = true;
                 if (typeof data.content === "string" && data.content) content = data.content;

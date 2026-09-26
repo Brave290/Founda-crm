@@ -541,3 +541,23 @@ export async function removeProviderAuth(providerID: string) {
   const res = await c.auth.remove({ providerID });
   return (res as any)?.data;
 }
+
+// OAuth "Connect in browser" flow: start returns the authorization URL the
+// user's browser must open; finish exchanges the code handed back by our
+// public callback route (relayed through Supabase so the exchange lands on
+// the instance that started the flow and owns the PKCE verifier).
+export async function startMcpAuth(name: string): Promise<{ authorizationUrl?: string; oauthState?: string }> {
+  const c = await ensureServer();
+  const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+  const res: any = await (c.mcp.auth as any).start({ name, directory });
+  if (res?.error) throw new Error(JSON.stringify(res.error));
+  return res?.data || {};
+}
+
+export async function finishMcpAuth(name: string, code: string): Promise<any> {
+  const c = await ensureServer();
+  const directory = process.env.OPENCODE_WORKSPACE || "/tmp/oc-workspace";
+  const res: any = await (c.mcp.auth as any).callback({ name, code, directory });
+  if (res?.error) throw new Error(JSON.stringify(res.error));
+  return res?.data;
+}

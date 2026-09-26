@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CodeIcon, GlobeIcon, SearchIcon, CheckCircleIcon, ClipboardIcon,
   FolderIcon, BotIcon, WrenchIcon, XIcon, CheckIcon, ClockIcon,
@@ -57,8 +57,17 @@ function todoIcon(status: string) {
 export function AgentActivity({ activity }: { activity: AgentActivityData }) {
   const [open, setOpen] = useState(false);
   const [openStep, setOpenStep] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const prevBusy = useRef(false);
 
   const { todos, steps, busy } = activity;
+
+  // closing hides the drawer for the current run; a new run brings it back
+  useEffect(() => {
+    if (busy && !prevBusy.current) setDismissed(false);
+    prevBusy.current = busy;
+  }, [busy]);
+
   const last = steps[steps.length - 1];
   const todosDone = todos.filter((t) => t.status === "completed").length;
 
@@ -69,6 +78,8 @@ export function AgentActivity({ activity }: { activity: AgentActivityData }) {
     : last
       ? last.title
       : "Working…";
+
+  if (dismissed && !open) return null;
 
   return (
     <>
@@ -100,6 +111,20 @@ export function AgentActivity({ activity }: { activity: AgentActivityData }) {
         <svg className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
         </svg>
+        {/* close — hides the drawer for this run */}
+        <span
+          role="button"
+          aria-label="Close agent activity"
+          title="Close"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDismissed(true);
+            setOpen(false);
+          }}
+          className="shrink-0 h-6 w-6 -mr-1 rounded-md flex items-center justify-center text-slate-600 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          <XIcon size={13} />
+        </span>
       </button>
 
       {/* Fullscreen view */}

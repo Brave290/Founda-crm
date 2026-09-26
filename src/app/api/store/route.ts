@@ -4,6 +4,8 @@ import { resolveStoreTarget, type StoreTarget as Target } from "@/lib/store-serv
 
 export const dynamic = "force-dynamic";
 
+const MAX_BYTES = 1_500_000; // guest payloads are one jsonb row — keep them sane
+
 // Service-role client (bypasses RLS; access is scoped by route logic)
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

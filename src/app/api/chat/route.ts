@@ -6,7 +6,7 @@ import { stepFromPart } from "@/lib/agent-activity";
 import { buildSkillsPrompt } from "@/lib/skills";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // Hobby cap — chain + 120s/model must fit inside the function limit
 
 function splitModel(m: string): { providerID: string; modelID: string } {
   const i = m.indexOf("/");
@@ -36,7 +36,8 @@ interface Prep {
 }
 
 async function prepare(request: NextRequest, body: any): Promise<Prep> {
-  const { sessionId, prompt, agent, model, systemPrompt, image, history, replay: replayHint } = body;
+  const { sessionId, prompt, agent, model, systemPrompt, image, history, replay: replayHint, mode } = body;
+  const fastMode = mode === "fast";
   const hist: { role: string; content: string }[] = Array.isArray(history)
     ? history.slice(-12)
     : [];
@@ -62,9 +63,12 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
   const chain: string[] = [];
-  // Latest MiMo is the app default: first when the user hasn't picked a model,
-  // and the IMMEDIATE fallback when a picked model stops responding.
-  for (const id of [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
+  // Fast mode: flash model FIRST (instant answers, no waiting on a stale pick).
+  // Default: latest MiMo first when unpicked, immediate fallback when picked
+  // model stops responding.
+  for (const id of fastMode
+    ? [DEFAULT_MODEL, model || "", ...nativeFree, ...staticChain]
+    : [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -139,15 +143,24 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
         const skillsText = deviceId
           ? skillsWithIdentity.split("${DEVICE_ID}").join(deviceId)
           : skillsWithIdentity;
-        const systemAll = [systemPrompt, skillsText].filter(Boolean).join("\n\n");
+        // Fast mode skips the (large) skills catalog so the first token lands
+        // immediately — identity header note stays so skill APIs still auth.
+        const extras = fastMode
+          ? [
+              "Answer immediately and directly: start writing the final response right away, no preamble, no deliberation.",
+              deviceId ? `Your identity for this app's APIs: send header "x-device-id: ${deviceId}" when calling this app's own API.` : "",
+            ]
+          : [skillsText];
+        const systemAll = [systemPrompt, ...extras].filter(Boolean).join("\n\n");
         if (systemAll) promptParams.system = systemAll;
 
-        // A dead/unresponsive provider can hang for the full function limit —
-        // fail over to the next model (MiMo) instead of stalling the chat.
+        // A dead/unresponsive provider can hang — fail over to the next model
+        // (MiMo) instead of stalling. 45s keeps the whole chain inside the
+        // 300s function budget so Vercel never kills the stream mid-answer.
         const promptRace = Promise.race([
           client.session.prompt(promptParams),
           new Promise((_res, rej) =>
-            setTimeout(() => rej(new Error("model timed out after 120s")), 120_000)
+            setTimeout(() => rej(new Error("model timed out after 45s")), 45_000)
           ),
         ]);
         const result: any = await promptRace;
