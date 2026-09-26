@@ -408,11 +408,16 @@ export default function ChatPage() {
       return;
     }
     if (cmd === "/image") {
-      if (!arg) { toast("Usage: /image a red fox in the snow", "error"); return; }
+      // optional size prefix: "/image 1280x720 a red fox"
+      const sizeM = /^\s*(\d{3,4})x(\d{3,4})(?:\s+|$)/.exec(arg);
+      const w = sizeM ? parseInt(sizeM[1], 10) : 1024;
+      const h = sizeM ? parseInt(sizeM[2], 10) : 1024;
+      const imgPrompt = (sizeM ? arg.slice(sizeM[0].length) : arg).trim();
+      if (!imgPrompt) { toast("Usage: /image a red fox in the snow", "error"); return; }
       const seed = Math.floor(Math.random() * 1_000_000);
-      const src = `/api/image?prompt=${encodeURIComponent(arg)}&width=1024&height=1024&seed=${seed}`;
-      const userMsg: Message = { role: "user", content: `/image ${arg}` };
-      const imgMsg: Message = { role: "assistant", content: arg, image: src };
+      const src = `/api/image?prompt=${encodeURIComponent(imgPrompt)}&width=${w}&height=${h}&seed=${seed}`;
+      const userMsg: Message = { role: "user", content: `/image ${imgPrompt}` };
+      const imgMsg: Message = { role: "assistant", content: imgPrompt, image: src };
       const withMsgs = [...messages, userMsg, imgMsg];
       setMessages(withMsgs);
       await saveMessages(withMsgs);
@@ -1252,6 +1257,7 @@ export default function ChatPage() {
             onRemoveImage={() => setAttachedImage(null)}
             onCancelEdit={() => setEditFrom(null)}
             onToggleSound={toggleSound}
+            onOpenMcp={() => { setSettingsTab("mcp"); setSettingsOpen(true); }}
           />
         </div>
       </div>
