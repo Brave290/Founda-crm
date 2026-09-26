@@ -91,10 +91,16 @@ export interface Skill {
   instructions: string;
 }
 
+// Public base URL for skill endpoints. Prefer the production alias — Vercel's
+// VERCEL_URL deployment host is often behind Deployment Protection and would
+// 401 the model's server-to-server curls.
 const appBase = () =>
-  process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.APP_BASE_URL || "http://localhost:3000";
+  process.env.APP_BASE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
 
 export const SKILLS: Skill[] = [
   // ── Image & Video ──────────────────────────────────────────────────────────
