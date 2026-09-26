@@ -311,7 +311,7 @@ export default function Home() {
 
         <div className="grid md:grid-cols-3 gap-4">
           {[
-            { step: "01", title: "Create account", desc: "Sign up free or continue as guest. Supabase handles authentication securely.", icon: <LockIcon size={20} /> },
+            { step: "01", title: "Create account", desc: "Sign up free with Supabase authentication and keep every session persistent.", icon: <LockIcon size={20} /> },
             { step: "02", title: "Start chatting", desc: "Pick a free agent, type your prompt, or use voice input. Images supported.", icon: <ChatIcon size={20} /> },
             { step: "03", title: "Sessions persist", desc: "Your conversations are saved forever. Export JSON anytime for upgrades.", icon: <DatabaseIcon size={20} /> },
           ].map((s, i) => (

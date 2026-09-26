@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth, loadGuestSessions, saveGuestSession } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { trackUsage, canSend, loadUsage, UsagePanel, useToast } from "@/components/UsagePanel";
 import {
   WrenchIcon, ClipboardIcon, MessageIcon, SearchIcon, BotIcon,
@@ -55,7 +55,7 @@ export default function ChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<string | undefined>();
 
-  const { user, guest, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [bgPending, setBgPending] = useState(false);
   const messagesRef = useRef<Message[]>([]);
@@ -538,7 +538,8 @@ export default function ChatPage() {
     if ((!body && !attachedImage) || sending) return;
     if (!canSend()) {
       setLimitReached(true);
-      toast("Daily limit reached. Resets at midnight.", "error");
+      const u = loadUsage();
+      toast(u.tokensUsed >= u.tokenLimit ? "Daily token limit reached. Resets at midnight." : "Daily message limit reached. Resets at midnight.", "error");
       return;
     }
 
@@ -773,7 +774,7 @@ export default function ChatPage() {
       setMessages(withReply);
       saveMessages(withReply).catch(() => {});
 
-      const estTokens = Math.ceil((userMsg.content.length + reply.content.length) / 4);
+      const estTokens = Number(metadata?.tokensUsed) || Math.ceil((userMsg.content.length + reply.content.length) / 4);
       const usage = trackUsage(1, estTokens);
       if (usage.messagesUsed >= usage.dailyLimit) setLimitReached(true);
     } catch (err: any) {
@@ -869,41 +870,18 @@ export default function ChatPage() {
   };
 
   const renameSession = async (title: string) => {
-    if (!title) return;
+    if (!title || !user || !supabase) return;
     titleRef.current = title;
     try {
-      if (isGuest || guest || !user) {
-        const sessions = loadGuestSessions();
-        const idx = sessions.findIndex((x: any) => x.id === sessionId);
-        if (idx >= 0) {
-          sessions[idx].title = title;
-          saveGuestSession(sessions[idx]);
-        } else {
-          saveGuestSession({
-            id: sessionId,
-            title,
-            agent: activeAgent,
-            messages: [],
-            createdAt: new Date().toISOString(),
-          });
-        }
-      } else if (supabase && user) {
-        const { error } = await supabase.from("sessions").update({ title }).eq("id", sessionId);
-        if (error) {
-          await supabase.from("sessions").insert({
-            id: sessionId,
-            user_id: user.id,
-            title,
-            agent_name: activeAgent,
-            state: { messages: [] },
-            message_count: 0,
-            updated_at: new Date().toISOString(),
-          });
-        }
+      const { error } = await supabase.from("sessions").update({ title, updated_at: new Date().toISOString() }).eq("id", sessionId).eq("user_id", user.id);
+      if (error) {
+        await supabase.from("sessions").insert({
+          id: sessionId, user_id: user.id, title, agent_name: activeAgent,
+          state: { messages: [] }, message_count: 0, updated_at: new Date().toISOString(),
+        });
       }
     } catch {}
   };
-
   const copyMsg = (c: string, idx: number) => {
     navigator.clipboard.writeText(c);
     setCopiedIdx(idx);
@@ -949,7 +927,7 @@ export default function ChatPage() {
   };
 
   const paletteActions: PaletteAction[] = [
-    { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}${isGuest || guest || !user ? "?guest=1" : ""}`) },
+    { id: "new", group: "Chat", label: "New chat", hint: "start fresh", icon: <MessageIcon size={14} />, run: () => router.push(`/sessions/${crypto.randomUUID()}`) },
     { id: "audit", group: "Chat", label: "Run security audit", hint: "/audit", icon: <ShieldIcon size={14} />, run: () => runSlash("/audit", "") },
     { id: "image", group: "Chat", label: "Generate an image…", hint: "/image", icon: <ImageIcon size={14} />, run: () => { inputApiRef.current?.set("/image "); setTimeout(() => inputApiRef.current?.focus(), 50); } },
     { id: "export-json", group: "Chat", label: "Export chat as JSON", hint: "/export json", icon: <DownloadIcon size={14} />, run: () => exportChat("json") },

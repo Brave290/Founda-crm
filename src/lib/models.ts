@@ -19,6 +19,14 @@ export interface CatalogProvider {
 
 export const MODEL_CATALOG: CatalogProvider[] = [
   {
+    provider: "opencode",
+    label: "MiMo · free",
+    keyless: true,
+    models: [
+      { id: "opencode/mimo-v2.6-flash-free", label: "MiMo v2.6 Flash · free" },
+    ],
+  },
+  {
     provider: "pollinations",
     label: "Pollinations",
     keyless: true,
@@ -71,7 +79,9 @@ export function buildModelChain(
   const available = resolveModels(storeKeys, env)
     .filter((m) => m.available)
     .map((m) => m.id);
-  const chain: string[] = [];
+  // MiMo is the stable app default. A user-selected model is still honored,
+  // but never replaces the working default/fallback.
+  const chain: string[] = [DEFAULT_MODEL];
   if (requested && !chain.includes(requested)) chain.push(requested);
   for (const id of available) if (!chain.includes(id)) chain.push(id);
   if (!chain.length) chain.push("pollinations/openai-fast");

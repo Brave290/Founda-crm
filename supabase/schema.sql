@@ -22,7 +22,7 @@ create table if not exists public.sessions (
   user_id uuid not null references auth.users(id) on delete cascade,
   title text default 'Untitled Session',
   agent_name text default 'default',
-  model text default 'anthropic/claude-sonnet-4',
+  model text default 'opencode/mimo-v2.6-flash-free',
   system_prompt text,
   state jsonb default '{}',
   message_count int default 0,
@@ -52,7 +52,7 @@ create table if not exists public.agents (
   name text not null,
   description text,
   system_prompt text default '',
-  model text default 'anthropic/claude-sonnet-4',
+  model text default 'opencode/mimo-v2.6-flash-free',
   temperature float default 0.7,
   max_tokens int default 4096,
   tools_enabled text[] default '{}',
@@ -235,6 +235,7 @@ create index if not exists idx_messages_session ON public.messages(session_id, c
 create index if not exists idx_agents_user ON public.agents(user_id);
 create index if not EXISTS idx_exports_session ON public.session_exports(session_id, version);
 create index if not exists idx_mcp_user ON public.mcp_connections(user_id);
+create unique index if not exists idx_mcp_user_name ON public.mcp_connections(user_id, name);
 create index if not exists idx_activity_user ON public.activity_log(user_id, created_at desc);
 -- ── Server-side storage for guest devices (keyed by random device id) ──
 create table if not exists public.guest_data (

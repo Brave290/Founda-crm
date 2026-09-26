@@ -29,7 +29,7 @@ async function listFor(owner: { kind: string; id: string }) {
 export async function GET(request: NextRequest) {
   try {
     const owner = await resolveStoreTarget(request);
-    if (!owner) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    if (!owner || owner.kind !== "user") return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
     // Opening the schedule panel also kicks due tasks (Hobby cron runs daily only).
     await runDueTasks().catch(() => {});
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const owner = await resolveStoreTarget(request);
-    if (!owner) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    if (!owner || owner.kind !== "user") return NextResponse.json({ error: "Sign in required" }, { status: 401 });
     const body = await request.json().catch(() => ({}));
     const action = body.action;
 

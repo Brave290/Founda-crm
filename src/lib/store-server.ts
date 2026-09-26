@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 // Server-side store access shared by /api/store, /api/models and /api/chat.
-// Auth: logged-in cookie (Supabase session) or guest x-device-id header.
+// Auth: logged-in Supabase session only; guest/device identity is disabled.
 
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,13 +30,6 @@ export async function resolveStoreTarget(req: Request): Promise<StoreTarget | nu
       if (data?.user) return { kind: "user", id: data.user.id };
     } catch {}
   }
-  const device = req.headers.get("x-device-id");
-  if (device && UUID_RE.test(device)) return { kind: "guest", id: device };
-  // Cookie fallback: localStorage can be wiped, the 1-year identity cookie
-  // cannot (without also clearing cookies), so usage/sessions never reset.
-  const cookie = req.headers.get("cookie") || "";
-  const cm = /(?:^|;\s*)founda_device=([0-9a-f-]{36})/i.exec(cookie);
-  if (cm && UUID_RE.test(cm[1])) return { kind: "guest", id: cm[1] };
   return null;
 }
 

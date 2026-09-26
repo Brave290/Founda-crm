@@ -14,7 +14,7 @@ import { isGuest } from "@/lib/auth";
 // ── Usage tracking (server-backed via lib/store, synced across devices) ──
 
 const DAILY_LIMIT = 1_000_000; // messages per day (soft anti-abuse cap)
-const TOKEN_LIMIT = 5_000_000_000; // 5 billion tokens per day — effectively unlimited for normal use
+const TOKEN_LIMIT = 5_000_000; // hard daily budget; usage is persisted with the account
 
 interface UsageState {
   messagesUsed: number;
@@ -69,7 +69,7 @@ export function resetUsage() {
 
 export function canSend(): boolean {
   const usage = loadUsage();
-  return usage.messagesUsed < usage.dailyLimit;
+  return usage.messagesUsed < usage.dailyLimit && usage.tokensUsed < usage.tokenLimit;
 }
 
 export function formatTokens(n: number): string {
@@ -193,9 +193,9 @@ export function UsagePanel({ compact = false }: { compact?: boolean }) {
         </div>
       </div>
 
-      {isLow && (
+      {(isLow || usage.tokensUsed >= usage.tokenLimit * 0.8) && (
         <div className={`mt-3 text-xs px-3 py-2 rounded-lg border ${isCritical ? "bg-red-500/[0.08] text-red-400 border-red-500/20" : "bg-amber-500/[0.08] text-amber-400 border-amber-500/20"}`}>
-          {isCritical ? "Almost out of messages. Resets at midnight." : "Running low on messages today."}
+          {usage.tokensUsed >= usage.tokenLimit ? "Token limit reached. Resets at midnight." : isCritical ? "Almost out of messages. Resets at midnight." : "Running low on messages today."}
         </div>
       )}
     </div>

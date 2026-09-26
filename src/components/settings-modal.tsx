@@ -114,7 +114,10 @@ export function SettingsModal({
   }, [open, initialTab]);
 
   useEffect(() => {
-    if (open && tab === "schedule") loadTasks();
+    if (!open || tab !== "schedule") return;
+    void loadTasks();
+    const timer = setInterval(() => { void loadTasks(); }, 30_000);
+    return () => clearInterval(timer);
   }, [open, tab]);
 
   useEffect(() => {
@@ -288,7 +291,7 @@ export function SettingsModal({
             <button
               onClick={() => {
                 onClose();
-                router.push(`/sessions/${crypto.randomUUID()}${user ? "" : "?guest=1"}`);
+                router.push(`/sessions/${crypto.randomUUID()}`);
               }}
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] text-slate-500 hover:text-slate-300 hover:bg-white/[0.05] w-full transition-colors"
             >

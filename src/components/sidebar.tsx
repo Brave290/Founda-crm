@@ -35,7 +35,7 @@ export function Sidebar({
     return () => window.removeEventListener("keydown", h);
   }, [menu, renaming]);
 
-  const isGuestNav = !user;
+  const isGuestNav = false;
 
   const refresh = () => {
     setGuestList(loadGuestSessions());
@@ -168,7 +168,7 @@ export function Sidebar({
     onClose();
   };
 
-  const newChat = () => go(`/sessions/${crypto.randomUUID()}${isGuestNav ? "?guest=1" : ""}`);
+  const newChat = () => go(`/sessions/${crypto.randomUUID()}`);
 
   const initial = user?.email?.[0]?.toUpperCase() || (guest ? "G" : "?");
   const displayName = user?.email?.split("@")[0] || (guest ? "Guest" : "User");
@@ -243,7 +243,7 @@ export function Sidebar({
                 id: s.id as string,
                 title: s.title || "Untitled chat",
                 ts: new Date(s.createdAt).getTime(),
-                href: `/sessions/${s.id}${user ? "" : "?guest=1"}`,
+                href: `/sessions/${s.id}`,
                 guest: true,
               })),
             ].sort((a, b) => b.ts - a.ts);

@@ -8,7 +8,8 @@ import { resolveStoreTarget } from "@/lib/store-server";
 import { startRun, finishRun, failRun, touchRun } from "@/lib/chat-runs";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // Hobby cap — chain + 120s/model must fit inside the function limit
+export const maxDuration = 300;
+const TOKEN_LIMIT = 5_000_000;
 
 function splitModel(m: string): { providerID: string; modelID: string } {
   const i = m.indexOf("/");
@@ -72,7 +73,7 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
   // model stops responding.
   for (const id of fastMode
     ? [DEFAULT_MODEL, model || "", ...nativeFree, ...staticChain]
-    : [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
+    : [DEFAULT_MODEL, model || "", ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -158,13 +159,12 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
         const systemAll = [systemPrompt, ...extras].filter(Boolean).join("\n\n");
         if (systemAll) promptParams.system = systemAll;
 
-        // A dead/unresponsive provider can hang — fail over to the next model
-        // (MiMo) instead of stalling. 45s keeps the whole chain inside the
-        // 300s function budget so Vercel never kills the stream mid-answer.
+        // A dead provider must fail over quickly; MiMo remains the next working path.
+        const modelTimeout = fastMode ? 20_000 : 45_000;
         const promptRace = Promise.race([
           client.session.prompt(promptParams),
           new Promise((_res, rej) =>
-            setTimeout(() => rej(new Error("model timed out after 45s")), 45_000)
+            setTimeout(() => rej(new Error(`model timed out after ${modelTimeout / 1000}s`)), modelTimeout)
           ),
         ]);
         const result: any = await promptRace;
@@ -522,15 +522,18 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  // Server-side daily limit — identity comes from header or cookie, so
-  // wiping browser storage can't reset the counter (client check is UX only).
+  const owner = await resolveStoreTarget(request);
+  if (!owner || owner.kind !== "user") {
+    return NextResponse.json({ error: "Authentication required. Sign in to use Founda CRM." }, { status: 401 });
+  }
+  // Server-side daily limit; usage is read from the authenticated account.
   try {
     const store = await readStoreForRequest(request);
     const u: any = store?.usage;
     const day = new Date().toISOString().slice(0, 10);
-    if (u && u.day === day && Number(u.messages) >= 1_000_000) {
+    if (u && u.day === day && (Number(u.messages) >= 1_000_000 || Number(u.tokens) >= TOKEN_LIMIT)) {
       return NextResponse.json(
-        { error: "Daily message limit reached. Resets at midnight." },
+        { error: Number(u?.tokens) >= TOKEN_LIMIT ? "Daily token limit reached. Resets at midnight." : "Daily message limit reached. Resets at midnight." },
         { status: 429 }
       );
     }
@@ -564,6 +567,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           agent: body.agent || "build",
           model: out.usedModel,
+          tokensUsed: Number(out.info?.tokens?.input || 0) + Number(out.info?.tokens?.output || 0) || undefined,
           requestedModel: prep.requestedModel,
           runId: prep.runId || undefined,
           fallback: out.attempts.length > 1 ? out.attempts : undefined,

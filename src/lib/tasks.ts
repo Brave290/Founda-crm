@@ -143,7 +143,7 @@ async function notify(t: TaskRow, result: string): Promise<string> {
 
 /** Run every due task (pending && run_at <= now+2min). Safe to call often. */
 export async function runDueTasks(): Promise<{ ran: number; due: number }> {
-  const horizon = new Date(Date.now() + 120_000).toISOString();
+  const horizon = new Date(Date.now() + 360_000).toISOString();
   const { data: due } = await supa
     .from("tasks")
     .select("*")
