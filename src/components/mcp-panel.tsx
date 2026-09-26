@@ -276,7 +276,7 @@ function McpPanel() {
       <div className="mb-5">
         <h2 className="text-lg font-semibold text-white">Integrations</h2>
         <p className="text-[13px] text-slate-500 mt-0.5">
-          Connect the tools you use — one click for {MCP_PRESETS.length} apps. You'll
+          Connect the tools you use — one click for {MCP_PRESETS.length} apps. You&apos;ll
           approve access in your browser, then land right back here.
         </p>
       </div>

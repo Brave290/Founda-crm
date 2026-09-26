@@ -1302,7 +1302,7 @@ export default function ChatPage() {
 
       {!online && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[130] px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[12px] backdrop-blur-xl shadow-lg">
-          You're offline — messages may fail
+          You&apos;re offline — messages may fail
         </div>
       )}
 

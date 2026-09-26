@@ -687,7 +687,7 @@ export function SettingsModal({
                     return !q || k.name.toLowerCase().includes(q) || k.description.toLowerCase().includes(q) || k.id.includes(q) || k.category.toLowerCase().includes(q) || k.triggers.some((t) => t.toLowerCase().includes(q));
                   }).length === 0 && (
                     <div className="col-span-full text-center py-6 text-[12.5px] text-slate-600">
-                      No skills match "{skillQuery}" — try the web-search skill, or import one from a URL above.
+                      No skills match &quot;{skillQuery}&quot; — try the web-search skill, or import one from a URL above.
                     </div>
                   )}
                 </div>
