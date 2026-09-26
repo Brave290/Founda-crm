@@ -536,7 +536,7 @@ export function SettingsModal({
 
                 {/* List */}
                 <div className="space-y-2">
-                  <div className="text-[14px] text-white">Your tasks <span className="text-slate-600 text-[12px]">— run on the server even when offline</span></div>
+                  <div className="text-[14px] text-white">Your tasks <span className="text-slate-600 text-[12px]">— daily server run when offline; faster while this panel is open</span></div>
                   {tasks.length === 0 && <p className="text-[12.5px] text-slate-600">Nothing scheduled yet.</p>}
                   {tasks.map((t) => (
                     <div key={t.id} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3.5">

@@ -4,7 +4,7 @@ import { runDueTasks } from "@/lib/tasks";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Vercel cron invokes this every five minutes when the deployment plan allows it; the schedule UI also polls while open.
+// Hobby Vercel invokes this once daily; the schedule UI polls every 30 seconds while open.
 // Also callable internally with the same bearer secret.
 export async function GET(request: NextRequest) {
   try {
