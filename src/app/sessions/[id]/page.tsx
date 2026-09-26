@@ -37,15 +37,6 @@ const AGENTS = [
   { id: "explore", name: "Explore", icon: <SearchIcon size={15} />, grad: "from-violet-500 to-indigo-600", dot: "bg-violet-400", ring: "text-violet-400", border: "border-l-teal-400/70" },
 ];
 
-const SUGGESTIONS = [
-  "Explain this codebase to me",
-  "Write a REST API in Node.js",
-  "Find bugs in my code",
-  "Create a README for my project",
-  "Refactor this function for performance",
-  "Add tests to my component",
-];
-
 export default function ChatPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -1121,18 +1112,10 @@ export default function ChatPage() {
               <div className="h-12 w-12 rounded-full border border-white/[0.1] bg-white/[0.04] flex items-center justify-center mb-5 text-slate-400">
                 <BotIcon size={22} />
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">How can I help?</h2>
-              <p className="text-slate-500 text-sm mb-8 max-w-md">
+              <h2 className="text-xl font-semibold text-white">How can I help?</h2>
+              <p className="text-slate-500 text-sm max-w-md">
                 Chat with your free opencode agent. Voice input, images, and persistent memory available.
               </p>
-              <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl w-full">
-                {SUGGESTIONS.map((s, i) => (
-                  <button key={s} onClick={() => sendMessage({ prompt: s })}
-                    className={`rounded-xl border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] p-3.5 text-left text-[13px] text-slate-400 hover:text-white transition-colors animate-fade-up stagger-${Math.min(i + 1, 6)}`}>
-                    {s}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
