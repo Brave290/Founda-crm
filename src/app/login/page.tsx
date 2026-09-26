@@ -27,7 +27,6 @@ export default function LoginPage() {
     setError("");
     const { error } = await login(email, password);
     if (error) { setError(error); setLoading(false); return; }
-    router.push(`/sessions/${crypto.randomUUID()}`);
     router.refresh();
   };
 

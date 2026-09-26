@@ -59,6 +59,7 @@ export function Sidebar({
 
   useEffect(() => {
     refresh();
+    const historyPoll = user ? window.setInterval(refresh, 5000) : undefined;
     let unsub: (() => void) | undefined;
     import("@/lib/store").then(async (st) => {
       await st.ready();
@@ -66,7 +67,10 @@ export function Sidebar({
       if (Array.isArray(p.pinned)) setPinned(p.pinned.map(String));
       unsub = st.subscribe(() => refresh());
     }).catch(() => {});
-    return () => unsub?.();
+    return () => {
+      if (historyPoll) window.clearInterval(historyPoll);
+      unsub?.();
+    };
   }, [user]);
 
   const savePinned = (next: string[]) => {

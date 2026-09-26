@@ -308,6 +308,16 @@ export default function ChatPage() {
         setMessages(data.state?.messages || []);
         setActiveAgent(data.agent_name || "build");
         titleRef.current = data.title || "New chat";
+      } else {
+        await supabase.from("sessions").insert({
+          id: sessionId,
+          user_id: user.id,
+          title: "New chat",
+          agent_name: activeAgent,
+          ...(model ? { model } : {}),
+          state: { messages: [] },
+          message_count: 0,
+        });
       }
     } catch {}
   };
