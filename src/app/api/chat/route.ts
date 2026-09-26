@@ -4,6 +4,8 @@ import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreForRequest } from "@/lib/store-server";
 import { stepFromPart } from "@/lib/agent-activity";
 import { buildSkillsPrompt } from "@/lib/skills";
+import { resolveStoreTarget } from "@/lib/store-server";
+import { startRun, finishRun, failRun, touchRun } from "@/lib/chat-runs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // Hobby cap — chain + 120s/model must fit inside the function limit
@@ -29,6 +31,8 @@ interface Prep {
   systemPrompt?: string;
   requestedModel: string;
   hasImage: boolean;
+  runId: string | null;
+  clientSessionId: string | null;
   ocSession(): string | null;
   runWithRecovery(): Promise<ChatOut>;
   /** Called before each attempt (failover / recovery / image-drop) so streams can reset partial state. */
@@ -36,7 +40,7 @@ interface Prep {
 }
 
 async function prepare(request: NextRequest, body: any): Promise<Prep> {
-  const { sessionId, prompt, agent, model, systemPrompt, image, history, replay: replayHint, mode } = body;
+  const { sessionId, prompt, agent, model, systemPrompt, image, history, replay: replayHint, mode, runId, clientSessionId } = body;
   const fastMode = mode === "fast";
   const hist: { role: string; content: string }[] = Array.isArray(history)
     ? history.slice(-12)
@@ -244,6 +248,8 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
     systemPrompt,
     requestedModel: model || "default",
     hasImage,
+    runId: typeof runId === "string" && /^[0-9a-f-]{36}$/i.test(runId) ? runId : null,
+    clientSessionId: typeof clientSessionId === "string" && clientSessionId ? clientSessionId.slice(0, 80) : null,
     ocSession: () => ocSession,
     runWithRecovery,
   };
@@ -438,6 +444,10 @@ function streamRun(prep: Prep): Response {
         }
       };
 
+      // Heartbeat: keeps "running" runs distinguishable from a dead function
+      // so the page can tell live background work from an interrupted run.
+      const heartbeat = prep.runId ? setInterval(() => touchRun(prep.runId), 20_000) : null;
+
       (async () => {
         // Subscribe to engine events before prompting; give the SSE connection a
         // moment to establish so the first tool/text events aren't missed.
@@ -465,6 +475,9 @@ function streamRun(prep: Prep): Response {
           flushText();
           flushReason();
           if (activityDirty) flushActivity();
+          // Persist BEFORE the client event: even if the user closed the tab,
+          // the reply is already durable and reconciles when they come back.
+          await finishRun(prep.runId, out.content, out.usedModel);
           send("done", {
             content: out.content,
             sessionId: prep.ocSession(),
@@ -472,14 +485,17 @@ function streamRun(prep: Prep): Response {
               agent: prep.agent || "build",
               model: out.usedModel,
               requestedModel: prep.requestedModel,
+              runId: prep.runId || undefined,
               fallback: out.attempts.length > 1 ? out.attempts : undefined,
               imageDropped: (out as any).imageDropped || undefined,
             },
           });
         } catch (e: any) {
           flushText();
+          await failRun(prep.runId, e?.message || "opencode error");
           send("error", { error: e?.message || "opencode error" });
         } finally {
+          if (heartbeat) clearInterval(heartbeat);
           if (activityTimer) clearTimeout(activityTimer);
           if (textTimer) clearTimeout(textTimer);
           if (reasonTimer) clearTimeout(reasonTimer);
@@ -522,22 +538,42 @@ export async function POST(request: NextRequest) {
   try {
     const prep = await prepare(request, body);
 
+    // Background run record: work + result survive the user leaving the app.
+    if (prep.runId && prep.clientSessionId) {
+      const owner = await resolveStoreTarget(request);
+      if (owner) {
+        await startRun(owner, {
+          runId: prep.runId,
+          clientSessionId: prep.clientSessionId,
+          prompt: String(body.prompt || ""),
+          agent: body.agent,
+        });
+      }
+    }
+
     if (body.stream === true) {
       return streamRun(prep);
     }
 
-    const out = await prep.runWithRecovery();
-    return NextResponse.json({
-      content: out.content,
-      sessionId: prep.ocSession(),
-      metadata: {
-        agent: body.agent || "build",
-        model: out.usedModel,
-        requestedModel: prep.requestedModel,
-        fallback: out.attempts.length > 1 ? out.attempts : undefined,
-        imageDropped: (out as any).imageDropped || undefined,
-      },
-    });
+    try {
+      const out = await prep.runWithRecovery();
+      await finishRun(prep.runId, out.content, out.usedModel);
+      return NextResponse.json({
+        content: out.content,
+        sessionId: prep.ocSession(),
+        metadata: {
+          agent: body.agent || "build",
+          model: out.usedModel,
+          requestedModel: prep.requestedModel,
+          runId: prep.runId || undefined,
+          fallback: out.attempts.length > 1 ? out.attempts : undefined,
+          imageDropped: (out as any).imageDropped || undefined,
+        },
+      });
+    } catch (e: any) {
+      await failRun(prep.runId, e?.message || "opencode error");
+      throw e;
+    }
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "opencode error" },

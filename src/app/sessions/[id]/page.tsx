@@ -58,6 +58,10 @@ export default function ChatPage() {
 
   const { user, guest, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [bgPending, setBgPending] = useState(false);
+  const messagesRef = useRef<Message[]>([]);
+  const activeRunRef = useRef<string | null>(null);
+  const syncSinceRef = useRef<number>(0);
   const [sending, setSending] = useState(false);
   const [activeAgent, setActiveAgent] = useState("build");
   const [showAgentPicker, setShowAgentPicker] = useState(false);
@@ -102,6 +106,126 @@ export default function ChatPage() {
   }, []);
 
   const lastUserIdx = messages.map((m) => m.role).lastIndexOf("user");
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // ── Manus-style background runs ──────────────────────────────────────────
+  // Every send is recorded server-side (chat_runs). If the user closes the
+  // tab, the server keeps working; on return we merge run results back into
+  // the conversation — completed replies land as messages, live runs show a
+  // placeholder that fills in when they finish.
+  const syncRuns = async () => {
+    if (!sessionId) return;
+    let runs: any[] = [];
+    try {
+      const res = await fetch(`/api/chat/runs?session=${encodeURIComponent(sessionId)}`, {
+        headers: { "x-device-id": getDeviceId() },
+      });
+      if (!res.ok) return;
+      runs = (await res.json()).runs || [];
+    } catch {
+      return;
+    }
+    const now = Date.now();
+    const since = syncSinceRef.current;
+    const fresh = runs.filter((r) => Date.parse(r.created_at || "") >= since);
+    const staleMs = 150_000; // heartbeat 20s, function cap 300s → 2.5min dead = interrupted
+    const runningLive = fresh.some(
+      (r) => r.status === "running" && now - Date.parse(r.updated_at || r.created_at) < staleMs
+    );
+    setBgPending(runningLive);
+
+    const snapshot = messagesRef.current;
+    const knownUser = new Set(
+      snapshot.filter((m) => m.role === "user").map((m) => m.metadata?.runId).filter(Boolean)
+    );
+    const asstIdx = new Map<string, number>();
+    snapshot.forEach((m, i) => {
+      if (m.role === "assistant" && m.metadata?.runId && !asstIdx.has(m.metadata.runId))
+        asstIdx.set(m.metadata.runId, i);
+    });
+
+    const appends: Message[] = [];
+    const replacements = new Map<number, Message>();
+    for (const r of fresh) {
+      if (r.id === activeRunRef.current) continue; // live stream owns this one
+      const idx = asstIdx.get(r.id);
+      const existing = idx != null ? snapshot[idx] : undefined;
+      const isPending = Boolean(existing?.metadata?.pending);
+      const addPair = () => {
+        if (!knownUser.has(r.id))
+          appends.push({ role: "user", content: r.prompt, metadata: { runId: r.id }, ts: Date.parse(r.created_at) || now });
+      };
+      if (r.status === "done" && r.reply) {
+        const finalMsg: Message = {
+          role: "assistant",
+          content: r.reply,
+          metadata: { runId: r.id, model: r.model, background: true },
+          ts: Date.parse(r.updated_at) || now,
+        };
+        if (idx != null && isPending) replacements.set(idx, finalMsg);
+        else if (idx == null) { addPair(); appends.push(finalMsg); }
+      } else if (r.status === "failed") {
+        const errMsg: Message = {
+          role: "assistant",
+          content: `Error: ${r.error || "background run failed"}`,
+          metadata: { runId: r.id, failed: true },
+          ts: Date.parse(r.updated_at) || now,
+        };
+        if (idx != null && isPending) replacements.set(idx, errMsg);
+        else if (idx == null) { addPair(); appends.push(errMsg); }
+      } else if (r.status === "running") {
+        const dead = now - Date.parse(r.updated_at || r.created_at) >= staleMs;
+        if (dead) {
+          const errMsg: Message = {
+            role: "assistant",
+            content: "Error: the connection dropped while I was working — send that again to retry.",
+            metadata: { runId: r.id, failed: true },
+            ts: Date.parse(r.updated_at) || now,
+          };
+          if (idx != null && isPending) replacements.set(idx, errMsg);
+          else if (idx == null) { addPair(); appends.push(errMsg); }
+        } else if (idx == null) {
+          addPair();
+          appends.push({
+            role: "assistant",
+            content: "",
+            metadata: { runId: r.id, pending: true },
+            ts: now,
+          });
+        }
+      }
+    }
+    if (!appends.length && !replacements.size) return;
+    const next = [...snapshot];
+    replacements.forEach((msg, i) => { next[i] = msg; });
+    next.push(...appends);
+    next.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    setMessages(next);
+    messagesRef.current = next;
+    saveMessages(next).catch(() => {});
+  };
+
+  // hydrate runs after messages load + whenever the tab regains focus
+  useEffect(() => {
+    syncSinceRef.current = 0;
+    const t = setTimeout(() => { void syncRuns(); }, 700);
+    const onFocus = () => { void syncRuns(); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [sessionId]);
+
+  // keep polling while a background run is live
+  useEffect(() => {
+    if (!bgPending) return;
+    const iv = setInterval(() => { void syncRuns(); }, 5000);
+    return () => clearInterval(iv);
+  }, [bgPending]);
 
   // Cmd/Ctrl+K command palette
   useEffect(() => {
@@ -377,6 +501,8 @@ export default function ChatPage() {
     inputApiRef.current?.set("");
     if (cmd === "/clear") {
       setMessages([]);
+      messagesRef.current = [];
+      syncSinceRef.current = Date.now();
       setOcSessionId(null);
       await saveMessages([]);
       toast("Conversation cleared", "success");
@@ -453,7 +579,11 @@ export default function ChatPage() {
     const bodyImage = overridePrompt ? null : attachedImage || null;
     const fromIdx = opts?.from ?? editFrom;
     const base = fromIdx != null ? messages.slice(0, fromIdx) : messages;
+    const runId = crypto.randomUUID();
+    activeRunRef.current = runId;
+    userMsg.metadata = { runId };
     const updated = [...base, userMsg];
+    if (fromIdx != null) syncSinceRef.current = Date.now();
     setEditFrom(null);
     stopRef.current = false;
     setMessages(updated);
@@ -482,6 +612,8 @@ export default function ChatPage() {
     try {
       const payload: any = {
         sessionId: ocSessionId || sessionId,
+        clientSessionId: sessionId,
+        runId,
         prompt: overridePrompt || userMsg.content,
         history: base.slice(-12).map((m) => ({ role: m.role, content: String(m.content || "").slice(0, 1500) })),
         agent: activeAgent,
@@ -661,8 +793,8 @@ export default function ChatPage() {
       if (stopRef.current && !content) content = "(stopped)";
 
       const reply: Message = streamErr
-        ? { role: "assistant", content: `Error: ${streamErr}`, ts: Date.now() }
-        : { role: "assistant", content: content || "(empty response)", metadata, ts: Date.now() };
+        ? { role: "assistant", content: `Error: ${streamErr}`, metadata: { runId }, ts: Date.now() }
+        : { role: "assistant", content: content || "(empty response)", metadata: { ...(metadata || {}), runId }, ts: Date.now() };
       if (!streamErr) beep();
 
       const withReply = [...updated, reply];
@@ -679,16 +811,18 @@ export default function ChatPage() {
         : aborted
           ? "Error: No response after automatic retries — tap Retry"
           : `Error: ${err.message}`;
-      const withErr = [...updated, { role: "assistant" as const, content: msg, ts: Date.now() }];
+      const withErr = [...updated, { role: "assistant" as const, content: msg, metadata: { runId }, ts: Date.now() }];
       setMessages(withErr);
       saveMessages(withErr).catch(() => {});
     } finally {
       abortRef.current = null;
       stopRef.current = false;
+      activeRunRef.current = null;
       setSending(false);
       setStreamText("");
       setStreamReason("");
       setActivity(null);
+      void syncRuns();
     }
   };
 
@@ -1083,7 +1217,18 @@ export default function ChatPage() {
                       )}
                     </>
                   )}
-                  {msg.role === "assistant" ? (
+                  {msg.role === "assistant" && msg.metadata?.pending ? (
+                    <div className="flex items-center gap-2.5 py-1">
+                      <span className="flex gap-1 items-center">
+                        <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                        <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                        <span className="w-1.5 h-1.5 bg-slate-500 rounded-full typing-dot" />
+                      </span>
+                      <span className="text-[13px] text-slate-600">
+                        Working in the background — you can leave, the result lands here
+                      </span>
+                    </div>
+                  ) : msg.role === "assistant" ? (
                     <Markdown content={msg.content} onImageClick={setLightbox} />
                   ) : (
                     <div className="whitespace-pre-wrap text-sm leading-relaxed break-words">{msg.content}</div>
@@ -1244,6 +1389,12 @@ export default function ChatPage() {
             </button>
           )}
           {sending && activity && <AgentActivity activity={activity} />}
+          {bgPending && !sending && (
+            <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-400/25 bg-emerald-500/[0.07] text-[12.5px] text-emerald-200 backdrop-blur-xl animate-fade-in">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Agent is still working in the background — result will appear below.
+            </div>
+          )}
           <ChatInputDock
             ref={inputApiRef}
             sending={sending}

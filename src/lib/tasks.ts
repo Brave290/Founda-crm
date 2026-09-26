@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { ensureServer, setProviderAuth } from "@/lib/opencode";
-import { buildModelChain, keyForModel } from "@/lib/models";
+import { ensureServer, setProviderAuth, listNativeModels } from "@/lib/opencode";
+import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreData } from "@/lib/store-server";
 import { resolveSmtp, sendMail } from "@/lib/email";
 
@@ -58,10 +58,18 @@ async function executeTask(t: TaskRow): Promise<string> {
   const store = await readStoreData(target as any).catch(() => null);
   const storeKeys = store?.settings?.apiKeys || {};
   const requested = store?.settings?.prefs?.model || "";
-  const chain = [
-    ...buildModelChain(requested, storeKeys, process.env),
-    "pollinations/openai-fast",
-  ].filter(Boolean);
+  // Same chain shape as /api/chat: picked model → latest MiMo (keyless, fast)
+  // → other native free models → catalog. The old chain started at key-gated
+  // catalog models, so keyless users hit engine errors ("Expected 'id'…")
+  // before ever reaching a working model.
+  const nativeFree = (await listNativeModels())
+    .filter((m: any) => m?.providerID === "opencode" && m?.enabled !== false && m?.status !== "deprecated")
+    .slice(0, 5)
+    .map((m: any) => `opencode/${m.id}`);
+  const chain: string[] = [];
+  for (const id of [requested, DEFAULT_MODEL, ...nativeFree, ...buildModelChain(requested, storeKeys, process.env), "pollinations/openai-fast"]) {
+    if (id && !chain.includes(id)) chain.push(id);
+  }
 
   const created: any = await client.session.create({
     title: `Scheduled: ${String(t.prompt).slice(0, 50)}`,
