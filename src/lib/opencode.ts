@@ -3,6 +3,7 @@ import { execSync, spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { DEFAULT_MODEL } from "@/lib/models";
 
 let client: OpencodeClient | null = null;
 let serverUrl: string | null = null;
@@ -464,6 +465,24 @@ export async function listNativeModels(): Promise<any[]> {
     lastModelError = e?.message || String(e);
     return [];
   }
+}
+
+// The "latest" default model — first keyless opencode model in the engine's
+// live list (newest first). Re-resolved every 10 minutes so a newly released
+// model becomes the app default automatically, forever. Falls back to the
+// hardcoded DEFAULT_MODEL when the engine list is unavailable.
+let latestModelCache: { at: number; id: string } | null = null;
+export async function getLatestNativeModel(): Promise<string> {
+  if (latestModelCache && Date.now() - latestModelCache.at < 600_000 && latestModelCache.id !== "opencode/mimo-v2.6-flash-free") {
+    return latestModelCache.id;
+  }
+  const native = await listNativeModels();
+  const first = native.find(
+    (m: any) => m?.providerID === "opencode" && m?.enabled !== false && m?.status !== "deprecated" && m?.status !== "alpha"
+  ) || native.find((m: any) => m?.providerID === "opencode" && m?.enabled !== false && m?.status !== "deprecated");
+  const id = first ? `opencode/${first.id}` : DEFAULT_MODEL;
+  latestModelCache = { at: Date.now(), id };
+  return id;
 }
 
 export async function getProviders(): Promise<any[]> {

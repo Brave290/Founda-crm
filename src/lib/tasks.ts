@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { ensureServer, setProviderAuth, listNativeModels } from "@/lib/opencode";
-import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
+import { ensureServer, setProviderAuth, listNativeModels, getLatestNativeModel } from "@/lib/opencode";
+import { buildModelChain, keyForModel } from "@/lib/models";
 import { readStoreData } from "@/lib/store-server";
 import { resolveSmtp, sendMail } from "@/lib/email";
 
@@ -62,8 +62,9 @@ async function executeTask(t: TaskRow): Promise<string> {
     .filter((m: any) => m?.providerID === "opencode" && m?.enabled !== false && m?.status !== "deprecated")
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
+  const defaultModel = await getLatestNativeModel();
   const chain: string[] = [];
-  for (const id of [requested, DEFAULT_MODEL, ...nativeFree, ...buildModelChain(requested, storeKeys, process.env)]) {
+  for (const id of [requested, defaultModel, ...nativeFree, ...buildModelChain(requested, storeKeys, process.env)]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 

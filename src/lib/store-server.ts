@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { verifySkillToken } from "@/lib/skill-token";
 
 // Server-side store access shared by /api/store, /api/models and /api/chat.
 // Auth: logged-in Supabase session only (cookie or mobile Bearer JWT).
@@ -15,6 +16,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export type StoreTarget = { kind: "user"; id: string };
 
 export async function resolveStoreTarget(req: Request): Promise<StoreTarget | null> {
+  // Skill bearer injected into the model's system prompt by /api/chat — lets
+  // the agent call the app's own APIs (email, fetch, search) as the user.
+  const skillToken = req.headers.get("x-founda-token");
+  if (skillToken) {
+    const owner = verifySkillToken(skillToken);
+    if (owner) return { kind: "user", id: owner.id };
+  }
   try {
     const supabase = createSupabaseServerClient();
     const {

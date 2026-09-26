@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureServer, setProviderAuth, listNativeModels, getAvailableAgents } from "@/lib/opencode";
+import { ensureServer, setProviderAuth, listNativeModels, getAvailableAgents, getLatestNativeModel } from "@/lib/opencode";
 import { buildModelChain, keyForModel, DEFAULT_MODEL } from "@/lib/models";
 import { readStoreForRequest } from "@/lib/store-server";
 import { stepFromPart } from "@/lib/agent-activity";
@@ -7,6 +7,7 @@ import { buildSkillsPrompt } from "@/lib/skills";
 import { resolveStoreTarget } from "@/lib/store-server";
 import { startRun, finishRun, failRun, touchRun } from "@/lib/chat-runs";
 import { recordUsage } from "@/lib/usage";
+import { issueSkillToken } from "@/lib/skill-token";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -58,25 +59,26 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
   // Plugin skills (catalog + user's enabled set from store prefs) ride along
   // as extra system text so the model knows exactly what it can do.
   const skillsPrompt = buildSkillsPrompt(store?.settings?.prefs);
-  // Give the model its per-session identity so skill endpoints (e.g. the
-  // email mailer) can authenticate the caller like /api/store does.
-  const deviceId = request.headers.get("x-device-id");
-  const skillsWithIdentity = deviceId
-    ? `${skillsPrompt}\n\nYour identity for this app's APIs: send header "x-device-id: ${deviceId}" whenever a skill instructs you to call this app's own API (the ${deviceId} placeholder in skill text means this value).`
-    : skillsPrompt;
+  // Skill bearer: the model authenticates skill API calls (email, fetch,
+  // search, image) with this short-lived token injected into its prompt.
+  const skillToken = issueSkillToken({ kind: "user", id: "self" });
+  const skillsWithIdentity = `${skillsPrompt}\n\nYour identity for this app's APIs: send header "x-founda-token: ${skillToken}" whenever a skill instructs you to call this app's own API (the token authenticates you as the signed-in user).`;
   const storeKeys = store?.settings?.apiKeys || {};
   const staticChain = buildModelChain(model, storeKeys, process.env);
   const nativeFree = (await listNativeModels())
     .filter((m: any) => m?.providerID === "opencode" && m?.enabled !== false && m?.status !== "deprecated")
     .slice(0, 5)
     .map((m: any) => `opencode/${m.id}`);
+  // The default model tracks opencode's live catalog — the newest keyless
+  // model leads the chain and becomes the app default automatically.
+  const defaultModel = await getLatestNativeModel();
   const chain: string[] = [];
   // Fast mode: flash model FIRST, then opencode free models — no static chain,
   // no skills catalog, nothing that adds latency. Normal mode: the user's pick
-  // first, then MiMo, then the rest.
+  // first, then the latest model, then the rest.
   for (const id of fastMode
-    ? [DEFAULT_MODEL, ...nativeFree]
-    : [model || "", DEFAULT_MODEL, ...nativeFree, ...staticChain]) {
+    ? [defaultModel, ...nativeFree]
+    : [model || "", defaultModel, ...nativeFree, ...staticChain]) {
     if (id && !chain.includes(id)) chain.push(id);
   }
 
@@ -176,15 +178,13 @@ async function prepare(request: NextRequest, body: any): Promise<Prep> {
             model: splitModel(m),
             agent: ag,
           };
-          const skillsText = deviceId
-            ? skillsWithIdentity.split("${DEVICE_ID}").join(deviceId)
-            : skillsWithIdentity;
+          const skillsText = skillsWithIdentity;
           // Fast mode skips the (large) skills catalog so the first token lands
           // immediately — identity header note stays so skill APIs still auth.
           const extras = fastMode
             ? [
                 "Answer immediately and directly: start writing the final response right away, no preamble, no deliberation.",
-                deviceId ? `Your identity for this app's APIs: send header "x-device-id: ${deviceId}" when calling this app's own API.` : "",
+                `Your identity for this app's APIs: send header "x-founda-token: ${skillToken}" when calling this app's own API.`,
               ]
             : [skillsText];
           const systemAll = [systemPrompt, ...extras].filter(Boolean).join("\n\n");
